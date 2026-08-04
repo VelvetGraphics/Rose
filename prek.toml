@@ -1,0 +1,7 @@
+exclude = { glob = "Rose/Vendor/*" }
+
+[[repos]]
+repo = "local"
+hooks = [
+    { id = "clang-format", name = "clang-format", language = "system", entry = "clang-format -i", types_or = ["c", "c++"] }
+]
