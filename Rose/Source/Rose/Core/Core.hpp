@@ -2,7 +2,7 @@
 
 #include "Rose/Core/Logger.hpp"
 
-// TODO: No assertions in dist builds
+#if !defined(ROSE_DIST)
 #define ASSERT(expr, ...)                                                                                              \
     do                                                                                                                 \
     {                                                                                                                  \
@@ -13,3 +13,10 @@
             std::abort();                                                                                              \
         }                                                                                                              \
     } while (false)
+#else
+#define ASSERT(expr, ...)                                                                                              \
+    do                                                                                                                 \
+    {                                                                                                                  \
+        expr;                                                                                                          \
+    } while (false)
+#endif

@@ -4,7 +4,6 @@
 #include <spdlog/spdlog.h>
 
 namespace Rose {
-    // TODO: No logging dist mode
     class Logger
     {
     public:
@@ -24,6 +23,7 @@ namespace Rose {
             s_Initialized = false;
         }
 
+#if !defined(ROSE_DIST)
         template<typename... Args>
         static void Trace(spdlog::format_string_t<Args...> format, Args&&... args)
         {
@@ -41,6 +41,22 @@ namespace Rose {
         {
             s_Logger->warn(format, std::forward<Args>(args)...);
         }
+#else
+        template<typename... Args>
+        static void Trace(spdlog::format_string_t<Args...> format, Args&&... args)
+        {
+        }
+
+        template<typename... Args>
+        static void Info(spdlog::format_string_t<Args...> format, Args&&... args)
+        {
+        }
+
+        template<typename... Args>
+        static void Warn(spdlog::format_string_t<Args...> format, Args&&... args)
+        {
+        }
+#endif
 
         template<typename... Args>
         static void Error(spdlog::format_string_t<Args...> format, Args&&... args)
