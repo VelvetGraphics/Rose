@@ -1,7 +1,5 @@
 #pragma once
 
-int main(int argc, char** argv);
-
 namespace Rose {
     class Main
     {
@@ -12,12 +10,11 @@ namespace Rose {
         static AppInitFunc AppInitFn;
         static AppShutdownFunc AppShutdownFn;
 
-    private:
+    public:
         static int Run(std::vector<std::string>&& args);
 
+    private:
         static bool RoseInit(std::vector<std::string>& args);
         static void RoseShutdown();
-
-        friend int ::main(int argc, char** argv);
     };
 } // namespace Rose
