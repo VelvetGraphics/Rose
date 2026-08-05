@@ -3,11 +3,18 @@
 
 #include <entt/entt.hpp>
 
+#include "Rose/Scene/Component.hpp"
+
 namespace Rose {
     class Scene
     {
     public:
-        entt::entity AddEntity() { return m_Registry.create(); }
+        [[nodiscard]] entt::entity CreateEntity(std::string name = "No name")
+        {
+            entt::entity e = m_Registry.create();
+            m_Registry.emplace<NameComponent>(e, std::move(name));
+            return e;
+        }
 
         template<typename T>
         T& AddComponent(entt::entity e)

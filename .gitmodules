@@ -1,3 +1,9 @@
 [submodule "Rose/Vendor/spdlog"]
 	path = Rose/Vendor/spdlog
 	url = https://github.com/gabime/spdlog.git
+[submodule "Rose/Vendor/GLFW"]
+	path = Rose/Vendor/GLFW
+	url = https://github.com/glfw/glfw.git
+[submodule "Rose/Vendor/glm"]
+	path = Rose/Vendor/glm
+	url = https://github.com/g-truc/glm.git

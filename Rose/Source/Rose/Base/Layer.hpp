@@ -1,0 +1,80 @@
+#pragma once
+#include "Rose/Base/Event.hpp"
+
+namespace Rose {
+    class Layer
+    {
+    public:
+        virtual ~Layer() = default;
+
+        virtual void OnAttach() {}
+        virtual void OnDetach() {}
+
+        virtual void OnTick(float dt) {}
+        virtual void OnUpdate(float dt) {}
+        virtual void OnRender() {}
+    };
+
+    class LayerStack final
+    {
+    public:
+        LayerStack() { m_Layers.reserve(4); }
+
+        ~LayerStack()
+        {
+            for (Layer* layer : m_Layers)
+            {
+                layer->OnDetach();
+                delete layer;
+            }
+        }
+
+        void PushLayer(Layer* layer)
+        {
+            layer->OnAttach();
+
+            m_Layers.emplace(m_Layers.begin() + m_LayerIndex, layer);
+            m_LayerIndex++;
+        }
+
+        void PopLayer(Layer* layer)
+        {
+            if (auto it = std::ranges::find(m_Layers, layer); it != m_Layers.end())
+            {
+                layer->OnDetach();
+                delete layer;
+                m_Layers.erase(it);
+                m_LayerIndex--;
+            }
+        }
+
+        void PushOverlay(Layer* overlay)
+        {
+            overlay->OnAttach();
+            m_Layers.push_back(overlay);
+        }
+
+        void PopOverlay(Layer* overlay)
+        {
+
+            if (auto it = std::ranges::find(m_Layers, overlay); it != m_Layers.end())
+            {
+                overlay->OnDetach();
+                delete overlay;
+                m_Layers.erase(it);
+            }
+        }
+
+        void Tick(float dt) const;
+        void Update(float dt) const;
+        void Render() const;
+
+        void SetEventBus(EventBus* ebus) { m_EventBus = ebus; }
+
+    private:
+        std::vector<Layer*> m_Layers;
+        EventBus* m_EventBus = nullptr;
+
+        uint16_t m_LayerIndex = 0;
+    };
+} // namespace Rose

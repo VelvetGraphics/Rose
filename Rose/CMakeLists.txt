@@ -6,12 +6,15 @@ add_library(Rose STATIC ${SOURCE})
 target_include_directories(Rose PUBLIC
         Source
         Vendor/entt
+        Vendor/glm
 )
 
 add_subdirectory(Vendor/spdlog)
+add_subdirectory(Vendor/GLFW)
 
 target_link_libraries(Rose PUBLIC
         spdlog
+        glfw
 )
 
 file(GLOB_RECURSE ROSE_COMMON_INCLUDE Source/Rose/Common/CommonInclude.hpp)

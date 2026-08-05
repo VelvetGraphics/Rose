@@ -1,13 +1,19 @@
 #include <Rose/Rose.hpp>
 
+#include "SandboxLayer.hpp"
+
 bool SandboxInit(std::vector<std::string>&& args)
 {
-    Rose::Logger::Trace("Initialized Sandbox!");
+    Rose::Main::Instance()->PushLayer(new SandboxLayer);
     return true;
 }
 
 Rose::Main::AppInitFunc Rose::Main::AppInitFn = SandboxInit;
 
-void SandboxShutdown() { Rose::Logger::Trace("Shut down sandbox!"); }
+void SandboxShutdown() {}
 
 Rose::Main::AppShutdownFunc Rose::Main::AppShutdownFn = SandboxShutdown;
+
+Rose::WindowInfo SandboxWindowInfoFn() { return {}; }
+
+Rose::Window::WindowInfoFunc Rose::Window::WindowInfoFn = SandboxWindowInfoFn;
