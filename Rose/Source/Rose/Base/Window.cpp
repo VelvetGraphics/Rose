@@ -9,6 +9,7 @@ namespace Rose {
 
         glfwWindowHint(GLFW_DECORATED, info.HasTitlebar);
         glfwWindowHint(GLFW_RESIZABLE, info.Resizable);
+        glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 
         m_Window = glfwCreateWindow(info.Width, info.Height, info.Title.c_str(),
                                     info.Fullscreen ? glfwGetPrimaryMonitor() : nullptr, nullptr);
@@ -23,7 +24,7 @@ namespace Rose {
 
     Window::~Window()
     {
-        if (m_Data.Open)
+        if (m_Open)
             Close();
     }
 
@@ -107,12 +108,15 @@ namespace Rose {
 
         glfwSetWindowCloseCallback(m_Window, [](GLFWwindow* window) {
             auto* data = static_cast<WindowData*>(glfwGetWindowUserPointer(window));
+            data->Open = false;
 
             data->EventCallbackFn(std::make_unique<WindowClosedEvent>(data->Self));
         });
 
         glfwSetWindowSizeCallback(m_Window, [](GLFWwindow* window, int width, int height) {
             auto* data = static_cast<WindowData*>(glfwGetWindowUserPointer(window));
+            data->Width = width;
+            data->Height = height;
 
             data->EventCallbackFn(std::make_unique<WindowResizedEvent>(data->Self, width, height));
         });
@@ -127,8 +131,20 @@ namespace Rose {
                 data->EventCallbackFn(std::make_unique<WindowLostFocusEvent>(data->Self));
         });
 
+        glfwSetWindowIconifyCallback(m_Window, [](GLFWwindow* window, int iconified) {
+            auto* data = static_cast<WindowData*>(glfwGetWindowUserPointer(window));
+            data->Minimized = iconified;
+
+            if (iconified)
+                data->EventCallbackFn(std::make_unique<WindowMinimizedEvent>(data->Self));
+            else
+                data->EventCallbackFn(std::make_unique<WindowUnMinimizedEvent>(data->Self));
+        });
+
         glfwSetWindowPosCallback(m_Window, [](GLFWwindow* window, int xPos, int yPos) {
             auto* data = static_cast<WindowData*>(glfwGetWindowUserPointer(window));
+            data->XPos = xPos;
+            data->YPos = yPos;
 
             data->EventCallbackFn(std::make_unique<WindowMovedEvent>(data->Self, xPos, yPos));
         });

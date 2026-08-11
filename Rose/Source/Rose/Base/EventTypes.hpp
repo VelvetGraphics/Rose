@@ -84,6 +84,22 @@ namespace Rose {
         EVENT_CLASS_TYPE(EventType::WindowLostFocus)
     };
 
+    class WindowMinimizedEvent final : public WindowEvent
+    {
+    public:
+        explicit WindowMinimizedEvent(Window* window) : WindowEvent(window) {}
+
+        EVENT_CLASS_TYPE(EventType::WindowMinimized)
+    };
+
+    class WindowUnMinimizedEvent final : public WindowEvent
+    {
+    public:
+        explicit WindowUnMinimizedEvent(Window* window) : WindowEvent(window) {}
+
+        EVENT_CLASS_TYPE(EventType::WindowUnMinimized)
+    };
+
     class WindowMovedEvent final : public WindowEvent
     {
     public:

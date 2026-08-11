@@ -7,3 +7,6 @@
 [submodule "Rose/Vendor/glm"]
 	path = Rose/Vendor/glm
 	url = https://github.com/g-truc/glm.git
+[submodule "Rose/Vendor/vk-bootstrap"]
+	path = Rose/Vendor/vk-bootstrap
+	url = https://github.com/charles-lunarg/vk-bootstrap.git

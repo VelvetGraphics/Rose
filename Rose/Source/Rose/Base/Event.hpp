@@ -14,6 +14,8 @@ namespace Rose {
         WindowResized,
         WindowFocused,
         WindowLostFocus,
+        WindowMinimized,
+        WindowUnMinimized,
         WindowMoved,
 
         KeyPressed,

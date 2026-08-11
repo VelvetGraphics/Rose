@@ -30,7 +30,7 @@ namespace Rose {
         ~Window() override;
 
         void Close();
-        bool IsOpen() const { return m_Data.Open; }
+        bool IsOpen() const { return m_Open; }
 
         int GetWidth() const { return m_Data.Width; }
         void SetWidth(int width);
@@ -40,6 +40,9 @@ namespace Rose {
 
         glm::ivec2 GetSize() const { return {m_Data.Width, m_Data.Height}; }
         void SetSize(const glm::ivec2& size);
+
+        bool IsFocused() const { return m_Data.Focused; }
+        bool IsMinimized() const { return m_Data.Minimized; }
 
         GLFWwindow* GetNativeWindow() const { return m_Window; }
         void SetEventCallback(const EventCallbackFunc& callback) { m_Data.EventCallbackFn = callback; }
@@ -51,6 +54,7 @@ namespace Rose {
 
     private:
         GLFWwindow* m_Window;
+        bool m_Open = false;
 
         struct WindowData
         {
@@ -71,6 +75,7 @@ namespace Rose {
 
             bool Open = true;
             bool Focused = true;
+            bool Minimized = false;
         };
 
         WindowData m_Data;

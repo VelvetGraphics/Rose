@@ -4,6 +4,7 @@
 #include "Rose/Base/EventTypes.hpp"
 #include "Rose/Base/Window.hpp"
 #include "Rose/Core/Core.hpp"
+#include "Rose/Renderer/Renderer.hpp"
 
 int Rose::Main::Run(std::vector<std::string>&& args)
 {
@@ -35,12 +36,13 @@ bool Rose::Main::RoseInit(std::vector<std::string>& args)
     ASSERT(WindowContext::Create(), "Failed to create window context");
     auto info = Window::WindowInfoFn();
 
-    m_EventBus.Observe<WindowClosedEvent>(std::bind(Rose::Main::OnWindowClose, std::placeholders::_1));
-
     m_Window = Ref<Window>::Create(info);
     m_Window->SetEventCallback(
             [ObjectPtr = &m_EventBus]<typename T0>(T0&& PH1) { ObjectPtr->Queue(std::forward<T0>(PH1)); });
 
+    ASSERT(Renderer::Init(m_Window->GetNativeWindow()), "Failed to initialize renderer");
+
+    m_EventBus.Observe<WindowClosedEvent>(std::bind(Rose::Main::OnWindowClose, std::placeholders::_1));
     m_LayerStack.SetEventBus(&m_EventBus);
 
     return true;
@@ -49,6 +51,8 @@ bool Rose::Main::RoseInit(std::vector<std::string>& args)
 void Rose::Main::RoseShutdown()
 {
     s_Running = true;
+
+    Renderer::Shutdown();
 
     m_Window->Close();
     WindowContext::Destroy();
@@ -71,7 +75,12 @@ void Rose::Main::MainLoop()
             m_LayerStack.Tick(s_TickTime);
 
         m_LayerStack.Update(dt.Time);
-        m_LayerStack.Render();
+
+        if (!m_Window->IsMinimized() && Renderer::BeginFrame())
+        {
+            m_LayerStack.Render();
+            Renderer::EndFrame();
+        }
 
         Window::PollEvents();
         m_EventBus.Dispatch();

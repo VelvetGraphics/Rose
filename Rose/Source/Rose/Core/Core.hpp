@@ -2,7 +2,6 @@
 
 #include "Rose/Core/Logger.hpp"
 
-#if !defined(ROSE_DIST)
 #define ASSERT(expr, ...)                                                                                              \
     do                                                                                                                 \
     {                                                                                                                  \
@@ -13,12 +12,5 @@
             std::abort();                                                                                              \
         }                                                                                                              \
     } while (false)
-#else
-#define ASSERT(expr, ...)                                                                                              \
-    do                                                                                                                 \
-    {                                                                                                                  \
-        expr;                                                                                                          \
-    } while (false)
-#endif
 
 #define BIT(x) (1 << x)
