@@ -31,6 +31,8 @@ namespace Rose {
 
             cmdBuf.pipelineBarrier2(dependencyInfo);
         }
+
+        constexpr U32 g_MaxFramesInFlight = 2;
     } // namespace
 
     GraphicsAPI::GraphicsAPI(GLFWwindow* window) : m_Window(window) {}
@@ -39,12 +41,16 @@ namespace Rose {
     {
         ASSERT(m_Device.waitIdle() == vk::Result::eSuccess, "Failed to wait for device being idle");
 
-        m_Device.destroyFence(m_InFlightFence);
-        m_Device.destroySemaphore(m_ImageAvailableSemaphore);
+        for (auto fence : m_InFlightFences)
+            m_Device.destroyFence(fence);
+
+        for (auto semaphore : m_ImageAvailableSemaphores)
+            m_Device.destroySemaphore(semaphore);
+
         for (auto semaphore : m_RendererFinishedSemaphores)
             m_Device.destroySemaphore(semaphore);
 
-        m_Device.freeCommandBuffers(m_CmdPool, 1, &m_CmdBuffer);
+        m_Device.freeCommandBuffers(m_CmdPool, m_CmdBuffers.size(), m_CmdBuffers.data());
         m_Device.destroyCommandPool(m_CmdPool);
 
         for (auto imageView : m_SwapChainImageViews)
@@ -67,16 +73,18 @@ namespace Rose {
 
     bool GraphicsAPI::BeginFrame()
     {
-        auto drawFinishedResult = m_Device.waitForFences(m_InFlightFence, vk::True, U64Limit);
+        m_FrameIndex = (m_FrameIndex + 1) % g_MaxFramesInFlight;
+
+        auto drawFinishedResult = m_Device.waitForFences(m_InFlightFences[m_FrameIndex], vk::True, U64Limit);
         if (drawFinishedResult != vk::Result::eSuccess)
             return false;
 
         vk::CommandBufferBeginInfo beginInfo = {};
-        if (m_CmdBuffer.begin(beginInfo) != vk::Result::eSuccess)
+        if (m_CmdBuffers[m_FrameIndex].begin(beginInfo) != vk::Result::eSuccess)
             return false;
 
-        vkAcquireNextImageKHR(m_Device, m_SwapChain.swapchain, U64Limit, m_ImageAvailableSemaphore, nullptr,
-                              &m_ImageIndex);
+        vkAcquireNextImageKHR(m_Device, m_SwapChain.swapchain, U64Limit, m_ImageAvailableSemaphores[m_FrameIndex],
+                              nullptr, &m_ImageIndex);
 
         vk::RenderingAttachmentInfo colorAttachment;
         colorAttachment.clearValue = vk::ClearValue({0.0f, 0.0f, 0.0f, 1.0f});
@@ -91,44 +99,45 @@ namespace Rose {
         renderingInfo.colorAttachmentCount = 1;
         renderingInfo.pColorAttachments = &colorAttachment;
 
-        TransitionImageLayout(m_CmdBuffer, m_SwapChainImages[m_ImageIndex], vk::ImageLayout::eUndefined,
+        TransitionImageLayout(m_CmdBuffers[m_FrameIndex], m_SwapChainImages[m_ImageIndex], vk::ImageLayout::eUndefined,
                               vk::ImageLayout::eColorAttachmentOptimal, {}, vk::AccessFlagBits2::eColorAttachmentWrite,
                               vk::PipelineStageFlagBits2::eColorAttachmentOutput,
                               vk::PipelineStageFlagBits2::eColorAttachmentOutput, vk::ImageAspectFlagBits::eColor);
 
-        m_CmdBuffer.beginRendering(renderingInfo);
+        m_CmdBuffers[m_FrameIndex].beginRendering(renderingInfo);
 
-        m_CmdBuffer.setViewport(0, vk::Viewport{0.0f, 0.0f, static_cast<float>(m_SwapChain.extent.width),
-                                                static_cast<float>(m_SwapChain.extent.height)});
-        m_CmdBuffer.setScissor(0, vk::Rect2D{vk::Offset2D{0, 0}, m_SwapChain.extent});
+        m_CmdBuffers[m_FrameIndex].setViewport(0, vk::Viewport{0.0f, 0.0f, static_cast<float>(m_SwapChain.extent.width),
+                                                               static_cast<float>(m_SwapChain.extent.height)});
+        m_CmdBuffers[m_FrameIndex].setScissor(0, vk::Rect2D{vk::Offset2D{0, 0}, m_SwapChain.extent});
 
-        ASSERT(m_Device.resetFences(m_InFlightFence) == vk::Result::eSuccess, "Failed to reset fences");
+        ASSERT(m_Device.resetFences(m_InFlightFences[m_FrameIndex]) == vk::Result::eSuccess, "Failed to reset fences");
 
         return true;
     }
 
     void GraphicsAPI::EndFrame()
     {
-        m_CmdBuffer.endRendering();
+        m_CmdBuffers[m_FrameIndex].endRendering();
 
-        TransitionImageLayout(m_CmdBuffer, m_SwapChainImages[m_ImageIndex], vk::ImageLayout::eColorAttachmentOptimal,
-                              vk::ImageLayout::ePresentSrcKHR, vk::AccessFlagBits2::eColorAttachmentWrite, {},
+        TransitionImageLayout(m_CmdBuffers[m_FrameIndex], m_SwapChainImages[m_ImageIndex],
+                              vk::ImageLayout::eColorAttachmentOptimal, vk::ImageLayout::ePresentSrcKHR,
+                              vk::AccessFlagBits2::eColorAttachmentWrite, {},
                               vk::PipelineStageFlagBits2::eColorAttachmentOutput,
                               vk::PipelineStageFlagBits2::eBottomOfPipe, vk::ImageAspectFlagBits::eColor);
 
-        ASSERT(m_CmdBuffer.end() == vk::Result::eSuccess, "Failed to end command buffer recording");
+        ASSERT(m_CmdBuffers[m_FrameIndex].end() == vk::Result::eSuccess, "Failed to end command buffer recording");
 
         vk::PipelineStageFlags waitDstStageMask = vk::PipelineStageFlagBits::eColorAttachmentOutput;
 
         vk::SubmitInfo submitInfo = {};
         submitInfo.waitSemaphoreCount = 1;
-        submitInfo.pWaitSemaphores = &m_ImageAvailableSemaphore;
+        submitInfo.pWaitSemaphores = &m_ImageAvailableSemaphores[m_FrameIndex];
         submitInfo.pWaitDstStageMask = &waitDstStageMask;
         submitInfo.commandBufferCount = 1;
-        submitInfo.pCommandBuffers = &m_CmdBuffer;
+        submitInfo.pCommandBuffers = &m_CmdBuffers[m_FrameIndex];
         submitInfo.signalSemaphoreCount = 1;
         submitInfo.pSignalSemaphores = &m_RendererFinishedSemaphores[m_ImageIndex];
-        ASSERT(m_GraphicsQueue.submit(submitInfo, m_InFlightFence) == vk::Result::eSuccess,
+        ASSERT(m_GraphicsQueue.submit(submitInfo, m_InFlightFences[m_FrameIndex]) == vk::Result::eSuccess,
                "Failed to submit command buffer to graphics queue");
 
         vk::SwapchainKHR swapChain = m_SwapChain.swapchain;
@@ -216,12 +225,12 @@ namespace Rose {
 
         vk::CommandBufferAllocateInfo allocInfo = {};
         allocInfo.commandPool = m_CmdPool;
-        allocInfo.commandBufferCount = 1;
+        allocInfo.commandBufferCount = g_MaxFramesInFlight;
         allocInfo.level = vk::CommandBufferLevel::ePrimary;
 
         auto cmdBufferResult = m_Device.allocateCommandBuffers(allocInfo);
         ASSERT(cmdBufferResult.result == vk::Result::eSuccess, "Failed to allocate command buffer");
-        m_CmdBuffer = cmdBufferResult.value[0];
+        m_CmdBuffers = cmdBufferResult.value;
     }
 
     void GraphicsAPI::CreateSyncObjects()
@@ -235,17 +244,21 @@ namespace Rose {
             m_RendererFinishedSemaphores.push_back(semaphoreResult.value);
         }
 
-        auto semaphoreResult = m_Device.createSemaphore(semaphoreInfo);
-        ASSERT(semaphoreResult.result == vk::Result::eSuccess, "Failed to create semaphore");
-
-        m_ImageAvailableSemaphore = semaphoreResult.value;
-
         vk::FenceCreateInfo fenceInfo = {};
         fenceInfo.flags = vk::FenceCreateFlagBits::eSignaled;
-        auto fenceResult = m_Device.createFence(fenceInfo);
-        ASSERT(fenceResult.result == vk::Result::eSuccess, "Failed to create fence");
 
-        m_InFlightFence = fenceResult.value;
+        for (U32 i = 0; i < g_MaxFramesInFlight; i++)
+        {
+            auto semaphoreResult = m_Device.createSemaphore(semaphoreInfo);
+            ASSERT(semaphoreResult.result == vk::Result::eSuccess, "Failed to create semaphore");
+
+            m_ImageAvailableSemaphores.push_back(semaphoreResult.value);
+
+            auto fenceResult = m_Device.createFence(fenceInfo);
+            ASSERT(fenceResult.result == vk::Result::eSuccess, "Failed to create fence");
+
+            m_InFlightFences.push_back(fenceResult.value);
+        }
     }
 
     void GraphicsAPI::RecreateSwapChain()

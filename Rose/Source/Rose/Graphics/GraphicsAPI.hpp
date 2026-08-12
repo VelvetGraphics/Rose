@@ -37,11 +37,11 @@ namespace Rose {
         U32 m_ImageIndex = 0;
 
         vk::CommandPool m_CmdPool;
-        vk::CommandBuffer m_CmdBuffer;
+        std::vector<vk::CommandBuffer> m_CmdBuffers;
 
-        vk::Semaphore m_ImageAvailableSemaphore;
+        std::vector<vk::Semaphore> m_ImageAvailableSemaphores;
         std::vector<vk::Semaphore> m_RendererFinishedSemaphores;
-        vk::Fence m_InFlightFence;
+        std::vector<vk::Fence> m_InFlightFences;
 
         U32 m_FrameIndex = 0;
     };
