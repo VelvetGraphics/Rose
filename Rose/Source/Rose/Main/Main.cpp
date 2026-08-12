@@ -64,25 +64,30 @@ void Rose::Main::RoseShutdown()
 
 void Rose::Main::MainLoop()
 {
-    DeltaTime dt(0.0f);
     float lastTime = DeltaTime::GetCurrentTime();
+    DeltaTime dt(0.0f);
+    dt.GetNextTime(lastTime);
 
     while (s_Running)
     {
-        dt.GetNextTime(lastTime);
 
         while (CanTick())
             m_LayerStack.Tick(s_TickTime);
 
         m_LayerStack.Update(dt.Time);
 
-        if (!m_Window->IsMinimized() && Renderer::BeginFrame())
+        if (!m_Window->IsMinimized())
         {
-            m_LayerStack.Render();
-            Renderer::EndFrame();
+            if (Renderer::BeginFrame())
+            {
+                m_LayerStack.Render();
+                Renderer::EndFrame();
+            }
         }
 
         Window::PollEvents();
+        dt.GetNextTime(lastTime);
+
         m_EventBus.Dispatch();
     }
 }

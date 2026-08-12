@@ -43,6 +43,8 @@ namespace Rose {
 
         LayerStack m_LayerStack;
 
+        std::thread m_RenderThread;
+
         static constexpr float s_TickTime = 1.0f / 60.0f;
         float m_TimeSum = 0.0f;
 
