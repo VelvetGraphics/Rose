@@ -13,13 +13,14 @@ add_subdirectory(Vendor/spdlog)
 add_subdirectory(Vendor/GLFW)
 find_package(Vulkan REQUIRED)
 add_subdirectory(Vendor/vk-bootstrap)
+add_subdirectory(Vendor/shaderc)
 
 target_link_libraries(Rose PUBLIC
         spdlog
         glfw
         Vulkan::Vulkan
         vk-bootstrap
-
+        shaderc
 )
 
 file(GLOB_RECURSE ROSE_COMMON_INCLUDE Source/Rose/Common/CommonInclude.hpp)

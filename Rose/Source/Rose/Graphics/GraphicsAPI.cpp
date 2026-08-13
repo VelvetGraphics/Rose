@@ -117,6 +117,7 @@ namespace Rose {
 
     void GraphicsAPI::EndFrame()
     {
+        ExecCommands();
         m_CmdBuffers[m_FrameIndex].endRendering();
 
         TransitionImageLayout(m_CmdBuffers[m_FrameIndex], m_SwapChainImages[m_ImageIndex],
@@ -154,6 +155,24 @@ namespace Rose {
         {
             RecreateSwapChain();
         }
+    }
+
+    vk::Format GraphicsAPI::SwapChainSurfaceFormat()
+    {
+        return static_cast<vk::Format>(s_CurrentContext->m_SwapChain.image_format);
+    }
+
+    void GraphicsAPI::Submit(std::function<void(vk::CommandBuffer)> cmd)
+    {
+        s_CurrentContext->m_Commands.emplace_back(std::move(cmd));
+    }
+
+    void GraphicsAPI::ExecCommands()
+    {
+        for (auto cmd : m_Commands)
+            cmd(m_CmdBuffers[m_FrameIndex]);
+
+        m_Commands.clear();
     }
 
     void GraphicsAPI::BootStrap()

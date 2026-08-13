@@ -14,6 +14,10 @@
 #include "Rose/Scene/Component.hpp"
 #include "Rose/Scene/Scene.hpp"
 
+#include "Rose/Renderer/Renderer.hpp"
+
+#include "Rose/Graphics/Shader.hpp"
+
 #include <entt/entt.hpp>
 
 #include <glm/glm.hpp>

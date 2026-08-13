@@ -5,6 +5,7 @@ namespace Rose {
     bool Renderer::Init(GLFWwindow* window)
     {
         s_GraphicsAPI = new GraphicsAPI(window);
+        s_GraphicsAPI->MakeContextCurrent();
         return s_GraphicsAPI->Init();
     }
 

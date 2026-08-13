@@ -20,14 +20,7 @@ namespace Rose {
     public:
         LayerStack() { m_Layers.reserve(4); }
 
-        ~LayerStack()
-        {
-            for (Layer* layer : m_Layers)
-            {
-                layer->OnDetach();
-                delete layer;
-            }
-        }
+        ~LayerStack() { Clear(); }
 
         void PushLayer(Layer* layer)
         {
@@ -63,6 +56,17 @@ namespace Rose {
                 delete overlay;
                 m_Layers.erase(it);
             }
+        }
+
+        void Clear()
+        {
+            for (auto it = m_Layers.rbegin(); it != m_Layers.rend(); ++it)
+            {
+                (*it)->OnDetach();
+                delete (*it);
+            }
+
+            m_Layers.clear();
         }
 
         void Tick(float dt) const;

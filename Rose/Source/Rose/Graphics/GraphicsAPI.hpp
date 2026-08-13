@@ -13,6 +13,16 @@ namespace Rose {
         bool BeginFrame();
         void EndFrame();
 
+        void MakeContextCurrent() { s_CurrentContext = this; }
+
+        static vk::Device Device() { return s_CurrentContext->m_Device; }
+
+        static vk::Format SwapChainSurfaceFormat();
+        static vk::Extent2D SwapChainExtent() { return s_CurrentContext->m_SwapChain.extent; }
+
+        static void Submit(std::function<void(vk::CommandBuffer)> cmd);
+        void ExecCommands();
+
     private:
         void BootStrap();
         void CreateCmdBuffers();
@@ -21,6 +31,8 @@ namespace Rose {
         void RecreateSwapChain();
 
     private:
+        inline static GraphicsAPI* s_CurrentContext = nullptr;
+
         GLFWwindow* m_Window = nullptr;
         vk::SurfaceKHR m_Surface;
 
@@ -38,6 +50,7 @@ namespace Rose {
 
         vk::CommandPool m_CmdPool;
         std::vector<vk::CommandBuffer> m_CmdBuffers;
+        std::vector<std::function<void(vk::CommandBuffer)>> m_Commands;
 
         std::vector<vk::Semaphore> m_ImageAvailableSemaphores;
         std::vector<vk::Semaphore> m_RendererFinishedSemaphores;

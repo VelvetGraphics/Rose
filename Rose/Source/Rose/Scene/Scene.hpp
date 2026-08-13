@@ -52,6 +52,8 @@ namespace Rose {
 
         entt::registry& GetRegistry() { return m_Registry; }
 
+        void Render() {};
+
     private:
         entt::registry m_Registry;
     };
