@@ -1,7 +1,6 @@
 #include "GraphicsAPI.hpp"
 
 #include "Rose/Core/Core.hpp"
-#include "spdlog/fmt/bundled/color.h"
 
 namespace Rose {
     namespace {

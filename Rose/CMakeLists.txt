@@ -13,6 +13,13 @@ add_subdirectory(Vendor/spdlog)
 add_subdirectory(Vendor/GLFW)
 find_package(Vulkan REQUIRED)
 add_subdirectory(Vendor/vk-bootstrap)
+
+set(SHADERC_SKIP_TESTS ON CACHE BOOL "" FORCE)
+set(SHADERC_SKIP_EXAMPLES ON CACHE BOOL "" FORCE)
+set(SHADERC_SKIP_EXECUTABLES ON CACHE BOOL "" FORCE)
+if(MSVC)
+    set(SHADERC_ENABLE_SHARED_CRT ON CACHE BOOL "" FORCE)
+endif()
 add_subdirectory(Vendor/shaderc)
 
 target_link_libraries(Rose PUBLIC
