@@ -12,6 +12,7 @@ namespace Rose {
 
         void Reload();
         void Bind() const;
+        void Draw() const;
 
         const std::string& GetPath() { return m_Path; }
         void SetPath(std::string path) { m_Path = std::move(path); }

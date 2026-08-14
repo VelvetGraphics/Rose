@@ -12,5 +12,6 @@ void SandboxLayer::OnRender()
 {
     m_Mesh->Bind();
     m_Shader->Bind();
+    m_Mesh->Draw();
     m_Scene.Render();
 }

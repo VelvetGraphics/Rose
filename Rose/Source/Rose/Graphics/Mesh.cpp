@@ -39,6 +39,11 @@ namespace Rose {
         });
     }
 
+    void Mesh::Draw() const
+    {
+        GraphicsAPI::Submit([this](vk::CommandBuffer cmdBuffer) { cmdBuffer.drawIndexed(m_IndexCount, 1, 0, 0, 0); });
+    }
+
     Mesh::Mesh(std::string&& path) : m_Path(std::move(path)) { Reload(); }
 
     std::pair<std::vector<Vertex>, std::vector<U32>> Mesh::LoadObj()
