@@ -276,5 +276,5 @@ namespace Rose {
 
     Ref<Shader> Shader::Create(std::string path) { return Ref<Shader>::Create(std::move(path)); }
 
-    Shader::Shader(std::string path) : m_Path(std::move(path)) { Reload(); }
+    Shader::Shader(std::string&& path) : m_Path(std::move(path)) { Reload(); }
 } // namespace Rose

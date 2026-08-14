@@ -18,4 +18,6 @@ namespace Rose {
     bool Renderer::BeginFrame() { return s_GraphicsAPI->BeginFrame(); }
 
     void Renderer::EndFrame() { s_GraphicsAPI->EndFrame(); }
+
+    void Renderer::WaitDeviceIdle() { s_GraphicsAPI->WaitDeviceIdle(); }
 } // namespace Rose

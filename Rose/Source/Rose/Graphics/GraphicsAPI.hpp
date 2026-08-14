@@ -14,14 +14,18 @@ namespace Rose {
         void EndFrame();
 
         void MakeContextCurrent() { s_CurrentContext = this; }
+        void WaitDeviceIdle() const;
 
+        static vk::PhysicalDevice PhysicalDevice() { return s_CurrentContext->m_PhysicalDevice.physical_device; }
         static vk::Device Device() { return s_CurrentContext->m_Device; }
+
+        static vk::CommandPool CmdPool() { return s_CurrentContext->m_GraphicsCmdPool; }
 
         static vk::Format SwapChainSurfaceFormat();
         static vk::Extent2D SwapChainExtent() { return s_CurrentContext->m_SwapChain.extent; }
 
         static void Submit(std::function<void(vk::CommandBuffer)> cmd);
-        void ExecCommands();
+        static void SubmitSingleTime(std::function<void(vk::CommandBuffer)> cmd);
 
     private:
         void BootStrap();
@@ -29,6 +33,8 @@ namespace Rose {
         void CreateSyncObjects();
 
         void RecreateSwapChain();
+
+        void ExecCommands();
 
     private:
         inline static GraphicsAPI* s_CurrentContext = nullptr;
@@ -38,17 +44,21 @@ namespace Rose {
 
         vkb::Instance m_Instance;
 
+        vkb::PhysicalDevice m_PhysicalDevice;
+
         vkb::Device m_VkbDevice;
         vk::Device m_Device;
 
         vk::Queue m_GraphicsQueue;
+        vk::Queue m_TransferQueue;
 
         vkb::Swapchain m_SwapChain;
         std::vector<vk::Image> m_SwapChainImages;
         std::vector<vk::ImageView> m_SwapChainImageViews;
         U32 m_ImageIndex = 0;
 
-        vk::CommandPool m_CmdPool;
+        vk::CommandPool m_GraphicsCmdPool;
+        vk::CommandPool m_TransferCmdPool;
         std::vector<vk::CommandBuffer> m_CmdBuffers;
         std::vector<std::function<void(vk::CommandBuffer)>> m_Commands;
 

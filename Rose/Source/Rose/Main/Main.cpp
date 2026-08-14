@@ -52,6 +52,7 @@ void Rose::Main::RoseShutdown()
 {
     s_Running = true;
 
+    Renderer::WaitDeviceIdle();
     m_LayerStack.Clear();
 
     Renderer::Shutdown();

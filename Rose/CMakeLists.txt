@@ -2,11 +2,15 @@ project (Rose)
 
 file(GLOB_RECURSE SOURCE Source/Rose/*.cpp)
 
-add_library(Rose STATIC ${SOURCE})
+add_library(Rose STATIC
+        ${SOURCE}
+        Vendor/tiny_obj_loader/tiny_obj_loader/tiny_obj_loader.cpp
+)
 target_include_directories(Rose PUBLIC
         Source
         Vendor/entt
         Vendor/glm
+        Vendor/tiny_obj_loader
 )
 
 add_subdirectory(Vendor/spdlog)

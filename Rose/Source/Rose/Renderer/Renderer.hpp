@@ -13,6 +13,8 @@ namespace Rose {
         static bool BeginFrame();
         static void EndFrame();
 
+        static void WaitDeviceIdle();
+
     private:
         inline static GraphicsAPI* s_GraphicsAPI = nullptr;
     };

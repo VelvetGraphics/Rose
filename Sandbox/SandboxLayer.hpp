@@ -10,5 +10,6 @@ public:
 
 private:
     Rose::Scene m_Scene;
+    Ref<Rose::Mesh> m_Mesh;
     Ref<Rose::Shader> m_Shader;
 };

@@ -38,8 +38,6 @@ namespace Rose {
 
     GraphicsAPI::~GraphicsAPI()
     {
-        ASSERT(m_Device.waitIdle() == vk::Result::eSuccess, "Failed to wait for device being idle");
-
         for (auto fence : m_InFlightFences)
             m_Device.destroyFence(fence);
 
@@ -49,8 +47,10 @@ namespace Rose {
         for (auto semaphore : m_RendererFinishedSemaphores)
             m_Device.destroySemaphore(semaphore);
 
-        m_Device.freeCommandBuffers(m_CmdPool, m_CmdBuffers.size(), m_CmdBuffers.data());
-        m_Device.destroyCommandPool(m_CmdPool);
+        m_Device.destroyCommandPool(m_TransferCmdPool);
+
+        m_Device.freeCommandBuffers(m_GraphicsCmdPool, m_CmdBuffers.size(), m_CmdBuffers.data());
+        m_Device.destroyCommandPool(m_GraphicsCmdPool);
 
         for (auto imageView : m_SwapChainImageViews)
             m_Device.destroyImageView(imageView);
@@ -156,6 +156,11 @@ namespace Rose {
         }
     }
 
+    void GraphicsAPI::WaitDeviceIdle() const
+    {
+        ASSERT(m_Device.waitIdle() == vk::Result::eSuccess, "Failed to wait for device idle");
+    }
+
     vk::Format GraphicsAPI::SwapChainSurfaceFormat()
     {
         return static_cast<vk::Format>(s_CurrentContext->m_SwapChain.image_format);
@@ -164,6 +169,32 @@ namespace Rose {
     void GraphicsAPI::Submit(std::function<void(vk::CommandBuffer)> cmd)
     {
         s_CurrentContext->m_Commands.emplace_back(std::move(cmd));
+    }
+
+    void GraphicsAPI::SubmitSingleTime(std::function<void(vk::CommandBuffer)> cmd)
+    {
+        vk::CommandBufferAllocateInfo allocInfo = {};
+        allocInfo.commandPool = s_CurrentContext->m_TransferCmdPool;
+        allocInfo.level = vk::CommandBufferLevel::ePrimary;
+        allocInfo.commandBufferCount = 1;
+
+        vk::CommandBuffer cmdBuffer = Device().allocateCommandBuffers(allocInfo).value[0];
+
+        vk::CommandBufferBeginInfo begin = {};
+        begin.flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit;
+        ASSERT(cmdBuffer.begin(begin) == vk::Result::eSuccess, "Failed to begin single time command buffer");
+
+        cmd(cmdBuffer);
+
+        ASSERT(cmdBuffer.end() == vk::Result::eSuccess, "Failed to end single time command buffer");
+        vk::SubmitInfo submitInfo = {};
+        submitInfo.commandBufferCount = 1;
+        submitInfo.pCommandBuffers = &cmdBuffer;
+        ASSERT(s_CurrentContext->m_TransferQueue.submit(submitInfo) == vk::Result::eSuccess,
+               "Failed to submit single time commands to queue");
+
+        ASSERT(s_CurrentContext->m_TransferQueue.waitIdle() == vk::Result::eSuccess, "Failed to wait for queue idle");
+        Device().freeCommandBuffers(s_CurrentContext->m_TransferCmdPool, cmdBuffer);
     }
 
     void GraphicsAPI::ExecCommands()
@@ -202,9 +233,9 @@ namespace Rose {
                                 .select();
 
         ASSERT(pdResult, std::string("Failed to select physical device: " + pdResult.error().message()));
-        const vkb::PhysicalDevice& pd = pdResult.value();
+        m_PhysicalDevice = pdResult.value();
 
-        vkb::DeviceBuilder deviceBuilder(pd);
+        vkb::DeviceBuilder deviceBuilder(m_PhysicalDevice);
         auto deviceResult = deviceBuilder.build();
 
         ASSERT(deviceResult, std::string("Failed to create logical device: " + instanceResult.error().message()));
@@ -215,6 +246,11 @@ namespace Rose {
         ASSERT(graphicsQueueResult,
                std::string("Failed to create graphics queue: " + graphicsQueueResult.error().message()));
         m_GraphicsQueue = graphicsQueueResult.value();
+
+        auto transferQueueResult = m_VkbDevice.get_dedicated_queue(vkb::QueueType::transfer);
+        ASSERT(transferQueueResult,
+               std::string("Failed to create graphics queue: " + transferQueueResult.error().message()));
+        m_TransferQueue = transferQueueResult.value();
 
         vkb::SwapchainBuilder swapChainBuilder(m_VkbDevice);
         auto swapChainResult = swapChainBuilder.build();
@@ -238,17 +274,22 @@ namespace Rose {
         poolInfo.queueFamilyIndex = m_VkbDevice.get_queue_index(vkb::QueueType::graphics).value();
 
         auto cmdPoolResult = m_Device.createCommandPool(poolInfo);
-        ASSERT(cmdPoolResult.result == vk::Result::eSuccess, std::string("Failed to create command pool"));
-        m_CmdPool = cmdPoolResult.value;
+        ASSERT(cmdPoolResult.result == vk::Result::eSuccess, std::string("Failed to create graphics command pool"));
+        m_GraphicsCmdPool = cmdPoolResult.value;
 
         vk::CommandBufferAllocateInfo allocInfo = {};
-        allocInfo.commandPool = m_CmdPool;
+        allocInfo.commandPool = m_GraphicsCmdPool;
         allocInfo.commandBufferCount = g_MaxFramesInFlight;
         allocInfo.level = vk::CommandBufferLevel::ePrimary;
 
         auto cmdBufferResult = m_Device.allocateCommandBuffers(allocInfo);
         ASSERT(cmdBufferResult.result == vk::Result::eSuccess, "Failed to allocate command buffer");
         m_CmdBuffers = cmdBufferResult.value;
+
+        poolInfo.queueFamilyIndex = m_VkbDevice.get_queue_index(vkb::QueueType::transfer).value();
+        cmdPoolResult = m_Device.createCommandPool(poolInfo);
+        ASSERT(cmdPoolResult.result == vk::Result::eSuccess, std::string("Failed to create transfer command pool"));
+        m_TransferCmdPool = cmdPoolResult.value;
     }
 
     void GraphicsAPI::CreateSyncObjects()
