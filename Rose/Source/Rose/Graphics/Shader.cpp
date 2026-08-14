@@ -181,6 +181,13 @@ namespace Rose {
         vk::PipelineInputAssemblyStateCreateInfo inputAssembly = {};
         inputAssembly.topology = vk::PrimitiveTopology::eTriangleList;
 
+        vk::PipelineDepthStencilStateCreateInfo depthStencilState;
+        depthStencilState.depthTestEnable = vk::True;
+        depthStencilState.depthWriteEnable = vk::True;
+        depthStencilState.depthCompareOp = vk::CompareOp::eLess;
+        depthStencilState.depthBoundsTestEnable = vk::False;
+        depthStencilState.stencilTestEnable = vk::False;
+
         vk::Extent2D swapChainExtent = GraphicsAPI::SwapChainExtent();
         vk::Viewport viewport{
                 0.0f, 0.0f, static_cast<float>(swapChainExtent.width), static_cast<float>(swapChainExtent.height),
@@ -238,6 +245,7 @@ namespace Rose {
         pipelineInfo.pStages = shaderStages.data();
         pipelineInfo.pVertexInputState = &vertexInput;
         pipelineInfo.pInputAssemblyState = &inputAssembly;
+        pipelineInfo.pDepthStencilState = &depthStencilState;
         pipelineInfo.pViewportState = &viewportState;
         pipelineInfo.pRasterizationState = &rasterizer;
         pipelineInfo.pMultisampleState = &multisampling;
@@ -251,6 +259,7 @@ namespace Rose {
         auto& pipelineRendering = pipelineCreateInfoChain.get<vk::PipelineRenderingCreateInfo>();
         pipelineRendering.colorAttachmentCount = 1;
         pipelineRendering.pColorAttachmentFormats = &colorAttachmentFormat;
+        pipelineRendering.depthAttachmentFormat = GraphicsAPI::DepthFormat();
 
         auto pipelineResult = GraphicsAPI::Device().createGraphicsPipeline(nullptr, pipelineInfo);
         ASSERT(pipelineResult.result == vk::Result::eSuccess, "Failed to create graphics pipeline");

@@ -70,6 +70,15 @@ namespace Rose {
     class EventBus final
     {
     public:
+        EventBus() = default;
+        ~EventBus() = default;
+
+        EventBus(const EventBus&) = delete;
+        EventBus& operator=(const EventBus&) = delete;
+
+        EventBus(EventBus&&) noexcept = default;
+        EventBus& operator=(EventBus&&) = default;
+
         template<typename T>
             requires std::derived_from<T, Event>
         using Callback = std::function<void(T&)>;

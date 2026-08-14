@@ -1,16 +1,14 @@
-project (Rose)
+project(Rose)
 
 file(GLOB_RECURSE SOURCE Source/Rose/*.cpp)
 
 add_library(Rose STATIC
         ${SOURCE}
-        Vendor/tiny_obj_loader/tiny_obj_loader/tiny_obj_loader.cpp
 )
 target_include_directories(Rose PUBLIC
         Source
         Vendor/entt
         Vendor/glm
-        Vendor/tiny_obj_loader
 )
 
 add_subdirectory(Vendor/spdlog)
@@ -21,10 +19,16 @@ add_subdirectory(Vendor/vk-bootstrap)
 set(SHADERC_SKIP_TESTS ON CACHE BOOL "" FORCE)
 set(SHADERC_SKIP_EXAMPLES ON CACHE BOOL "" FORCE)
 set(SHADERC_SKIP_EXECUTABLES ON CACHE BOOL "" FORCE)
-if(MSVC)
+set(SHADERC_ENABLE_HLSL OFF)
+if (MSVC)
     set(SHADERC_ENABLE_SHARED_CRT ON CACHE BOOL "" FORCE)
-endif()
+endif ()
 add_subdirectory(Vendor/shaderc)
+
+add_library(tiny_obj_loader STATIC Vendor/tiny_obj_loader/tiny_obj_loader/tiny_obj_loader.cpp)
+target_include_directories(tiny_obj_loader PUBLIC
+        Vendor/tiny_obj_loader
+)
 
 target_link_libraries(Rose PUBLIC
         spdlog
@@ -32,6 +36,7 @@ target_link_libraries(Rose PUBLIC
         Vulkan::Vulkan
         vk-bootstrap
         shaderc
+        tiny_obj_loader
 )
 
 file(GLOB_RECURSE ROSE_COMMON_INCLUDE Source/Rose/Common/CommonInclude.hpp)
@@ -70,7 +75,7 @@ if (CMAKE_BUILD_TYPE STREQUAL "Dist")
     target_compile_definitions(Rose PUBLIC ROSE_DIST)
 
     target_compile_definitions(Rose PUBLIC SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_ERROR)
-endif()
+endif ()
 
 get_property(is_multi_config GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
 if (NOT is_multi_config)

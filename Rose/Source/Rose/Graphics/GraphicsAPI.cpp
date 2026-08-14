@@ -1,13 +1,15 @@
 #include "GraphicsAPI.hpp"
 
 #include "Rose/Core/Core.hpp"
+#include "Rose/Graphics/VulkanCall.hpp"
+#include "Rose/Main/Main.hpp"
 
 namespace Rose {
     namespace {
         void TransitionImageLayout(vk::CommandBuffer cmdBuf, vk::Image image, vk::ImageLayout oldLayout,
                                    vk::ImageLayout newLayout, vk::AccessFlags2 srcAccessMask,
-                                   vk::AccessFlags2 dstAccessMask, vk::PipelineStageFlagBits2 srcStageMask,
-                                   vk::PipelineStageFlagBits2 dstStageMask, vk::ImageAspectFlags aspectMask)
+                                   vk::AccessFlags2 dstAccessMask, vk::PipelineStageFlags2 srcStageMask,
+                                   vk::PipelineStageFlags2 dstStageMask, vk::ImageAspectFlags aspectMask)
         {
             vk::ImageMemoryBarrier2 barrier = {};
             barrier.image = image;
@@ -38,6 +40,10 @@ namespace Rose {
 
     GraphicsAPI::~GraphicsAPI()
     {
+        m_Device.destroyImageView(m_DepthImageView);
+        m_Device.freeMemory(m_DepthImageMemory);
+        m_Device.destroyImage(m_DepthImage);
+
         for (auto fence : m_InFlightFences)
             m_Device.destroyFence(fence);
 
@@ -66,6 +72,10 @@ namespace Rose {
         BootStrap();
         CreateCmdBuffers();
         CreateSyncObjects();
+        CreateDepthResources();
+
+        Main::GetEventBus().Observe<WindowResizedEvent>(
+                [this](WindowResizedEvent& e) -> decltype(auto) { OnWindowResize(e); });
 
         return true;
     }
@@ -92,16 +102,33 @@ namespace Rose {
         colorAttachment.loadOp = vk::AttachmentLoadOp::eClear;
         colorAttachment.storeOp = vk::AttachmentStoreOp::eStore;
 
+        vk::ClearValue depthClear = vk::ClearDepthStencilValue(1.0f, 0.0f);
+        vk::RenderingAttachmentInfo depthAttachment;
+        depthAttachment.clearValue = depthClear;
+        depthAttachment.imageLayout = vk::ImageLayout::eDepthAttachmentOptimal;
+        depthAttachment.imageView = m_DepthImageView;
+        depthAttachment.loadOp = vk::AttachmentLoadOp::eClear;
+        depthAttachment.storeOp = vk::AttachmentStoreOp::eDontCare;
+
         vk::RenderingInfo renderingInfo;
         renderingInfo.renderArea = vk::Rect2D{vk::Offset2D{0, 0}, m_SwapChain.extent};
         renderingInfo.layerCount = 1;
         renderingInfo.colorAttachmentCount = 1;
         renderingInfo.pColorAttachments = &colorAttachment;
+        renderingInfo.pDepthAttachment = &depthAttachment;
 
         TransitionImageLayout(m_CmdBuffers[m_FrameIndex], m_SwapChainImages[m_ImageIndex], vk::ImageLayout::eUndefined,
                               vk::ImageLayout::eColorAttachmentOptimal, {}, vk::AccessFlagBits2::eColorAttachmentWrite,
                               vk::PipelineStageFlagBits2::eColorAttachmentOutput,
                               vk::PipelineStageFlagBits2::eColorAttachmentOutput, vk::ImageAspectFlagBits::eColor);
+
+        TransitionImageLayout(
+                m_CmdBuffers[m_FrameIndex], m_DepthImage, vk::ImageLayout::eUndefined,
+                vk::ImageLayout::eDepthAttachmentOptimal, vk::AccessFlagBits2::eDepthStencilAttachmentWrite,
+                vk::AccessFlagBits2::eDepthStencilAttachmentWrite,
+                vk::PipelineStageFlagBits2::eEarlyFragmentTests | vk::PipelineStageFlagBits2::eLateFragmentTests,
+                vk::PipelineStageFlagBits2::eEarlyFragmentTests | vk::PipelineStageFlagBits2::eLateFragmentTests,
+                vk::ImageAspectFlagBits::eDepth);
 
         m_CmdBuffers[m_FrameIndex].beginRendering(renderingInfo);
 
@@ -171,7 +198,7 @@ namespace Rose {
         s_CurrentContext->m_Commands.emplace_back(std::move(cmd));
     }
 
-    void GraphicsAPI::SubmitSingleTime(std::function<void(vk::CommandBuffer)> cmd)
+    void GraphicsAPI::SubmitSingleTime(const std::function<void(vk::CommandBuffer)>& cmd)
     {
         vk::CommandBufferAllocateInfo allocInfo = {};
         allocInfo.commandPool = s_CurrentContext->m_TransferCmdPool;
@@ -203,6 +230,37 @@ namespace Rose {
             cmd(m_CmdBuffers[m_FrameIndex]);
 
         m_Commands.clear();
+    }
+
+    vk::Format GraphicsAPI::FindSupportedFormat(const std::vector<vk::Format>& candidates, vk::ImageTiling tiling,
+                                                vk::FormatFeatureFlags features)
+    {
+        for (vk::Format format : candidates)
+        {
+            vk::FormatProperties props = GraphicsAPI::PhysicalDevice().getFormatProperties(format);
+
+            if ((tiling == vk::ImageTiling::eLinear && (props.linearTilingFeatures & features) == features) ||
+                (tiling == vk::ImageTiling::eOptimal) && (props.optimalTilingFeatures & features) == features)
+            {
+                return format;
+            }
+        }
+
+        ASSERT(false, "Failed to find suitable image format");
+    }
+
+    void GraphicsAPI::OnWindowResize(WindowResizedEvent& e)
+    {
+        if (e.GetWidth() == 0 || e.GetHeight() == 0)
+            return;
+
+        RecreateSwapChain();
+
+        m_Device.destroyImageView(m_DepthImageView);
+        m_Device.freeMemory(m_DepthImageMemory);
+        m_Device.destroyImage(m_DepthImage);
+
+        CreateDepthResources();
     }
 
     void GraphicsAPI::BootStrap()
@@ -318,6 +376,20 @@ namespace Rose {
 
             m_InFlightFences.push_back(fenceResult.value);
         }
+    }
+
+    void GraphicsAPI::CreateDepthResources()
+    {
+        m_DepthFormat =
+                FindSupportedFormat({vk::Format::eD32Sfloat, vk::Format::eD32SfloatS8Uint, vk::Format::eD24UnormS8Uint},
+                                    vk::ImageTiling::eOptimal, vk::FormatFeatureFlagBits::eDepthStencilAttachment);
+
+        std::tie(m_DepthImage, m_DepthImageMemory) = VulkanCall::CreateImage(
+                vk::Extent3D{m_SwapChain.extent.width, m_SwapChain.extent.height, 1}, m_DepthFormat,
+                vk::ImageTiling::eOptimal, vk::ImageUsageFlagBits::eDepthStencilAttachment,
+                vk::MemoryPropertyFlagBits::eDeviceLocal);
+
+        m_DepthImageView = VulkanCall::CreateImageView(m_DepthImage, m_DepthFormat, vk::ImageAspectFlagBits::eDepth);
     }
 
     void GraphicsAPI::RecreateSwapChain()

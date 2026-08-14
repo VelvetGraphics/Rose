@@ -30,11 +30,11 @@ namespace Rose {
 
         vk::Buffer m_VertexBuffer;
         vk::DeviceMemory m_VertexBufferMemory;
-        U32 m_VertexCount;
+        U32 m_VertexCount = 0;
 
         vk::Buffer m_IndexBuffer;
         vk::DeviceMemory m_IndexBufferMemory;
-        U32 m_IndexCount;
+        U32 m_IndexCount = 0;
 
         friend Ref<Mesh>;
     };

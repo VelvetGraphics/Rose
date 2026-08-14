@@ -1,4 +1,5 @@
 #pragma once
+#include "Rose/Base/EventTypes.hpp"
 #include "Rose/Graphics/VulkanInclude.hpp"
 
 namespace Rose {
@@ -24,17 +25,25 @@ namespace Rose {
         static vk::Format SwapChainSurfaceFormat();
         static vk::Extent2D SwapChainExtent() { return s_CurrentContext->m_SwapChain.extent; }
 
+        static vk::Format DepthFormat() { return s_CurrentContext->m_DepthFormat; }
+
         static void Submit(std::function<void(vk::CommandBuffer)> cmd);
-        static void SubmitSingleTime(std::function<void(vk::CommandBuffer)> cmd);
+        static void SubmitSingleTime(const std::function<void(vk::CommandBuffer)>& cmd);
 
     private:
         void BootStrap();
         void CreateCmdBuffers();
         void CreateSyncObjects();
+        void CreateDepthResources();
 
         void RecreateSwapChain();
 
         void ExecCommands();
+
+        static vk::Format FindSupportedFormat(const std::vector<vk::Format>& candidates, vk::ImageTiling tiling,
+                                              vk::FormatFeatureFlags features);
+
+        void OnWindowResize(WindowResizedEvent& e);
 
     private:
         inline static GraphicsAPI* s_CurrentContext = nullptr;
@@ -65,7 +74,11 @@ namespace Rose {
         std::vector<vk::Semaphore> m_ImageAvailableSemaphores;
         std::vector<vk::Semaphore> m_RendererFinishedSemaphores;
         std::vector<vk::Fence> m_InFlightFences;
-
         U32 m_FrameIndex = 0;
+
+        vk::Image m_DepthImage;
+        vk::DeviceMemory m_DepthImageMemory;
+        vk::ImageView m_DepthImageView;
+        vk::Format m_DepthFormat = vk::Format::eUndefined;
     };
 } // namespace Rose
