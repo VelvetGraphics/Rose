@@ -38,11 +38,12 @@ bool Rose::Main::RoseInit(std::vector<std::string>& args)
 
     m_Window = Ref<Window>::Create(info);
     m_Window->SetEventCallback(
-            [ObjectPtr = &m_EventBus]<typename T0>(T0&& PH1) { ObjectPtr->Queue(std::forward<T0>(PH1)); });
+            [ObjectPtr = &m_EventBus]<typename T>(T&& event) { ObjectPtr->Queue(std::forward<T>(event)); });
 
     ASSERT(Renderer::Init(m_Window->GetNativeWindow()), "Failed to initialize renderer");
 
-    m_EventBus.Observe<WindowClosedEvent>(std::bind(Rose::Main::OnWindowClose, std::placeholders::_1));
+    m_EventBus.Observe<WindowClosedEvent>(
+            []<typename T>(T&& event) { Rose::Main::OnWindowClose(std::forward<T>(event)); });
     m_LayerStack.SetEventBus(&m_EventBus);
 
     return true;

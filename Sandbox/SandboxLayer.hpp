@@ -10,6 +10,9 @@ public:
 
 private:
     Rose::Scene m_Scene;
-    Ref<Rose::Mesh> m_Mesh;
-    Ref<Rose::Shader> m_Shader;
+    Rose::Camera m_Camera;
+
+    entt::entity m_Monkey = entt::null;
+    Rose::TransformComponent* m_MonkeyTransform = nullptr;
+    Ref<Rose::Shader> m_MonkeyShader;
 };

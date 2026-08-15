@@ -2,6 +2,7 @@
 
 #include "Rose/Core/Core.hpp"
 #include "Rose/Graphics/GraphicsAPI.hpp"
+#include "Rose/Graphics/VulkanCall.hpp"
 #include "shaderc/shaderc.hpp"
 
 namespace Rose {
@@ -17,6 +18,7 @@ namespace Rose {
             }
 
             ASSERT(false, "Invalid shader stage");
+            std::abort();
         }
 
         ShaderStage ShaderStageFromString(const std::string& string)
@@ -28,6 +30,7 @@ namespace Rose {
                 return ShaderStage::Fragment;
 
             ASSERT(false, "Invalid string for shader stage");
+            std::abort();
         }
 
         vk::ShaderModule CreateShaderModule(const std::vector<U32>& bytecode)
@@ -54,6 +57,8 @@ namespace Rose {
                 default:
                     ASSERT(false, "Not implemented shader data type");
             }
+
+            std::abort();
         }
 
         std::vector<vk::VertexInputAttributeDescription>
@@ -66,47 +71,121 @@ namespace Rose {
                 vulkanAttrib.binding = 0;
                 vulkanAttrib.location = attrib.Location;
                 vulkanAttrib.format = TranslateShaderDataType(attrib.DataType);
+                vulkanAttrib.offset = attrib.Offset;
             }
 
-            return std::move(vulkanAttributes);
+            return vulkanAttributes;
+        }
+
+        std::pair<ShaderResourceKey, ShaderResource> CreateResource(const spirv_cross::Compiler& comp,
+                                                                    const spirv_cross::Resource& resource,
+                                                                    vk::DescriptorType type)
+        {
+            U32 set = comp.get_decoration(resource.id, spv::Decoration::DecorationDescriptorSet);
+            U32 binding = comp.get_decoration(resource.id, spv::Decoration::DecorationBinding);
+            size_t size = comp.get_declared_struct_size(comp.get_type(resource.base_type_id));
+
+            return {{set, binding},
+                    {.Name = resource.name, .Type = type, .Set = set, .Binding = binding, .Size = size, .Stages = {}}};
+        }
+
+        // TODO: Other types
+        // TODO: Merge multiple stages
+        std::map<ShaderResourceKey, ShaderResource> Reflect(const std::vector<U32>& vertSpirv,
+                                                            const std::vector<U32>& fragSpirv)
+        {
+            spirv_cross::Compiler vertComp(vertSpirv);
+            spirv_cross::ShaderResources resources = vertComp.get_shader_resources();
+
+            std::map<ShaderResourceKey, ShaderResource> result;
+
+            for (const auto& resource : resources.uniform_buffers)
+            {
+                std::pair<ShaderResourceKey, ShaderResource> reflected =
+                        CreateResource(vertComp, resource, vk::DescriptorType::eUniformBuffer);
+                auto [it, inserted] = result.try_emplace(reflected.first, reflected.second);
+
+                if (!inserted)
+                {
+                    ASSERT(it->second.Type == reflected.second.Type, "Descriptor type differs between shader stages");
+
+                    ASSERT(it->second.Size == reflected.second.Size,
+                           "Uniform buffer size differs between shader stages");
+                }
+
+                it->second.Stages |= vk::ShaderStageFlagBits::eVertex;
+            }
+
+            spirv_cross::Compiler fragComp(fragSpirv);
+            resources = fragComp.get_shader_resources();
+
+            for (const auto& resource : resources.uniform_buffers)
+            {
+                std::pair<ShaderResourceKey, ShaderResource> reflected =
+                        CreateResource(fragComp, resource, vk::DescriptorType::eUniformBuffer);
+                auto [it, inserted] = result.try_emplace(reflected.first, reflected.second);
+
+                if (!inserted)
+                {
+                    ASSERT(it->second.Type == reflected.second.Type, "Descriptor type differs between shader stages");
+
+                    ASSERT(it->second.Size == reflected.second.Size,
+                           "Uniform buffer size differs between shader stages");
+                }
+
+                it->second.Stages |= vk::ShaderStageFlagBits::eFragment;
+            }
+
+            return result;
         }
     } // namespace
 
-    Shader::~Shader()
-    {
-        GraphicsAPI::Device().destroyPipelineLayout(m_Layout);
-        GraphicsAPI::Device().destroyPipeline(m_Pipeline);
-    }
+    Shader::~Shader() { DestroyResources(); }
 
     void Shader::Bind() const
     {
-        GraphicsAPI::Submit([this](vk::CommandBuffer cmdBuffer) {
-            cmdBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, m_Pipeline);
+        const vk::Pipeline pipeline = m_Pipeline;
+
+        GraphicsAPI::Submit([pipeline](vk::CommandBuffer cmdBuffer) {
+            cmdBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, pipeline);
         });
+
+        for (U32 set = 0; set < m_DescriptorSets.size(); set++)
+            BindDescriptorSet(set);
     }
 
     void Shader::Reload()
     {
-        std::vector<U32> vertShaderBytecode, fragShaderBytecode;
+        if (m_Loaded)
         {
-            std::ifstream file(m_Path, std::ios::ate);
-            ASSERT(file.is_open(), std::string("Failed to open file at path: " + m_Path));
-
-            S64 fileSize = file.tellg();
-            file.seekg(0);
-
-            std::string code;
-            code.resize(fileSize);
-
-            file.read(code.data(), fileSize);
-            file.close();
-
-            ShaderSources sources = PreProcess(code);
-            vertShaderBytecode = Compile(m_Path, ShaderStage::Vertex, sources.VertexShader);
-            fragShaderBytecode = Compile(m_Path, ShaderStage::Fragment, sources.FragmentShader);
+            DestroyResources();
         }
 
+        std::ifstream file(m_Path, std::ios::ate);
+        ASSERT(file.is_open(), std::string("Failed to open file at path: " + m_Path));
+
+        S64 fileSize = file.tellg();
+        ASSERT(fileSize >= 0, "Failed to determine shader file size");
+
+        file.seekg(0);
+
+        std::string code;
+        code.resize(fileSize);
+
+        file.read(code.data(), fileSize);
+        file.close();
+
+        ShaderSources sources = PreProcess(code);
+        std::vector<U32> vertShaderBytecode = Compile(m_Path, ShaderStage::Vertex, sources.VertexShader);
+        std::vector<U32> fragShaderBytecode = Compile(m_Path, ShaderStage::Fragment, sources.FragmentShader);
+
+        m_Resources = Reflect(vertShaderBytecode, fragShaderBytecode);
+
+        CreateUniformObjects();
+        CreateDescriptors();
         CreateGraphicsPipeline(std::move(vertShaderBytecode), std::move(fragShaderBytecode));
+
+        m_Loaded = true;
     }
 
     ShaderSources Shader::PreProcess(const std::string& code)
@@ -134,13 +213,275 @@ namespace Rose {
                 case ShaderStage::Vertex:
                     result.VertexShader = (pos == std::string::npos) ? code.substr(nextLinePos)
                                                                      : code.substr(nextLinePos, pos - nextLinePos);
+                    break;
                 case ShaderStage::Fragment:
                     result.FragmentShader = (pos == std::string::npos) ? code.substr(nextLinePos)
                                                                        : code.substr(nextLinePos, pos - nextLinePos);
+                    break;
             }
         }
 
         return result;
+    }
+
+    void Shader::DestroyResources()
+    {
+        ASSERT(GraphicsAPI::Device().waitIdle() == vk::Result::eSuccess, "Failed to wait for device idle");
+
+        if (m_Pipeline)
+        {
+            GraphicsAPI::Device().destroyPipeline(m_Pipeline);
+
+            m_Pipeline = nullptr;
+        }
+
+        if (m_Layout)
+        {
+            GraphicsAPI::Device().destroyPipelineLayout(m_Layout);
+
+            m_Layout = nullptr;
+        }
+
+        m_DescriptorSets.clear();
+
+        if (m_DescriptorPool)
+        {
+            GraphicsAPI::Device().destroyDescriptorPool(m_DescriptorPool);
+
+            m_DescriptorPool = nullptr;
+        }
+
+        for (vk::DescriptorSetLayout layout : m_DescriptorSetLayouts)
+        {
+            if (layout)
+            {
+                GraphicsAPI::Device().destroyDescriptorSetLayout(layout);
+            }
+        }
+
+        m_DescriptorSetLayouts.clear();
+
+        for (const auto& memories : m_UniformBuffersMemory | std::views::values)
+        {
+            for (vk::DeviceMemory memory : memories)
+            {
+                if (memory)
+                {
+                    GraphicsAPI::Device().unmapMemory(memory);
+                }
+            }
+        }
+
+        m_UniformBuffersMapped.clear();
+
+        for (const auto& buffers : m_UniformBuffers | std::views::values)
+        {
+            for (vk::Buffer buffer : buffers)
+            {
+                if (buffer)
+                {
+                    GraphicsAPI::Device().destroyBuffer(buffer);
+                }
+            }
+        }
+
+        m_UniformBuffers.clear();
+
+        for (const auto& memories : m_UniformBuffersMemory | std::views::values)
+        {
+            for (vk::DeviceMemory memory : memories)
+            {
+                if (memory)
+                {
+                    GraphicsAPI::Device().freeMemory(memory);
+                }
+            }
+        }
+
+        m_UniformBuffersMemory.clear();
+
+        m_Resources.clear();
+
+        m_Loaded = false;
+    }
+
+    void Shader::CreateDescriptors()
+    {
+        if (m_Resources.empty())
+            return;
+
+        const U32 frameCount = GraphicsAPI::MaxFramesInFlight();
+
+        U32 maxSet = 0;
+
+        for (const auto& resource : m_Resources | std::views::values)
+        {
+            maxSet = std::max(maxSet, resource.Set);
+        }
+
+        const U32 setCount = maxSet + 1;
+
+        std::vector<std::vector<const ShaderResource*>> resourcesBySet(setCount);
+
+        for (const auto& resource : m_Resources | std::views::values)
+        {
+            resourcesBySet[resource.Set].push_back(&resource);
+        }
+
+        m_DescriptorSetLayouts.resize(setCount);
+
+        for (U32 set = 0; set < setCount; ++set)
+        {
+            std::vector<vk::DescriptorSetLayoutBinding> bindings;
+
+            bindings.reserve(resourcesBySet[set].size());
+
+            for (const ShaderResource* resource : resourcesBySet[set])
+            {
+                vk::DescriptorSetLayoutBinding binding{};
+                binding.binding = resource->Binding;
+                binding.descriptorType = resource->Type;
+                binding.descriptorCount = 1;
+                binding.stageFlags = resource->Stages;
+
+                bindings.emplace_back(binding);
+            }
+
+            vk::DescriptorSetLayoutCreateInfo layoutInfo{};
+            layoutInfo.bindingCount = static_cast<U32>(bindings.size());
+
+            layoutInfo.pBindings = bindings.empty() ? nullptr : bindings.data();
+
+            auto layoutResult = GraphicsAPI::Device().createDescriptorSetLayout(layoutInfo);
+
+            ASSERT(layoutResult.result == vk::Result::eSuccess, "Failed to create descriptor set layout");
+
+            m_DescriptorSetLayouts[set] = layoutResult.value;
+        }
+
+        std::map<vk::DescriptorType, U32> descriptorCounts;
+
+        for (const auto& resource : m_Resources | std::views::values)
+        {
+            descriptorCounts[resource.Type] += frameCount;
+        }
+
+        std::vector<vk::DescriptorPoolSize> poolSizes;
+        poolSizes.reserve(descriptorCounts.size());
+
+        for (const auto& [type, count] : descriptorCounts)
+        {
+            vk::DescriptorPoolSize poolSize{};
+            poolSize.type = type;
+            poolSize.descriptorCount = count;
+
+            poolSizes.emplace_back(poolSize);
+        }
+
+        vk::DescriptorPoolCreateInfo poolInfo{};
+
+        poolInfo.maxSets = setCount * frameCount;
+
+        poolInfo.poolSizeCount = static_cast<U32>(poolSizes.size());
+
+        poolInfo.pPoolSizes = poolSizes.empty() ? nullptr : poolSizes.data();
+
+        auto poolResult = GraphicsAPI::Device().createDescriptorPool(poolInfo);
+
+        ASSERT(poolResult.result == vk::Result::eSuccess, "Failed to create descriptor pool");
+
+        m_DescriptorPool = poolResult.value;
+
+        m_DescriptorSets.resize(setCount);
+
+        for (U32 set = 0; set < setCount; ++set)
+        {
+            std::vector<vk::DescriptorSetLayout> frameLayouts(frameCount, m_DescriptorSetLayouts[set]);
+
+            vk::DescriptorSetAllocateInfo allocInfo{};
+            allocInfo.descriptorPool = m_DescriptorPool;
+            allocInfo.descriptorSetCount = frameCount;
+            allocInfo.pSetLayouts = frameLayouts.data();
+
+            auto descriptorSetsResult = GraphicsAPI::Device().allocateDescriptorSets(allocInfo);
+
+            ASSERT(descriptorSetsResult.result == vk::Result::eSuccess, "Failed to allocate descriptor sets");
+
+            m_DescriptorSets[set] = std::move(descriptorSetsResult.value);
+        }
+
+        for (const auto& resource : m_Resources | std::views::values)
+        {
+            switch (resource.Type)
+            {
+                case vk::DescriptorType::eUniformBuffer: {
+                    const ShaderResourceKey key = resource.Key();
+
+                    for (U32 frame = 0; frame < frameCount; ++frame)
+                    {
+                        vk::DescriptorBufferInfo bufferInfo{};
+                        bufferInfo.buffer = m_UniformBuffers.at(key).at(frame);
+
+                        bufferInfo.offset = 0;
+                        bufferInfo.range = resource.Size;
+
+                        vk::WriteDescriptorSet write{};
+                        write.dstSet = m_DescriptorSets.at(resource.Set).at(frame);
+
+                        write.dstBinding = resource.Binding;
+                        write.dstArrayElement = 0;
+                        write.descriptorCount = 1;
+                        write.descriptorType = resource.Type;
+                        write.pBufferInfo = &bufferInfo;
+
+                        GraphicsAPI::Device().updateDescriptorSets(write, {});
+                    }
+
+                    break;
+                }
+
+                default:
+                    ASSERT(false, "Unsupported descriptor type");
+
+                    std::abort();
+            }
+        }
+    }
+
+    void Shader::CreateUniformObjects()
+    {
+        constexpr U32 frameCount = GraphicsAPI::MaxFramesInFlight();
+
+        for (const auto& resource : m_Resources | std::views::values)
+        {
+            ASSERT(resource.Type == vk::DescriptorType::eUniformBuffer,
+                   "CreateUniformObjects received a non-uniform-buffer resource");
+
+            const ShaderResourceKey key = resource.Key();
+
+            auto& buffers = m_UniformBuffers[key];
+            auto& memories = m_UniformBuffersMemory[key];
+            auto& mappedMemories = m_UniformBuffersMapped[key];
+
+            buffers.reserve(frameCount);
+            memories.reserve(frameCount);
+            mappedMemories.reserve(frameCount);
+
+            for (U32 frame = 0; frame < frameCount; frame++)
+            {
+                auto [buffer, memory] = VulkanCall::CreateBuffer(resource.Size, vk::BufferUsageFlagBits::eUniformBuffer,
+                                                                 vk::MemoryPropertyFlagBits::eHostVisible |
+                                                                         vk::MemoryPropertyFlagBits::eHostCoherent);
+
+                auto mapResult = GraphicsAPI::Device().mapMemory(memory, 0, resource.Size);
+
+                ASSERT(mapResult.result == vk::Result::eSuccess, "Failed to map uniform buffer memory");
+
+                buffers.emplace_back(buffer);
+                memories.emplace_back(memory);
+                mappedMemories.emplace_back(mapResult.value);
+            }
+        }
     }
 
     void Shader::CreateGraphicsPipeline(std::vector<U32>&& vertShaderBytecode, std::vector<U32>&& fragShaderBytecode)
@@ -231,7 +572,8 @@ namespace Rose {
         colorBlending.pAttachments = &colorBlendAttachment;
 
         vk::PipelineLayoutCreateInfo layoutInfo = {};
-        layoutInfo.setLayoutCount = 0;
+        layoutInfo.setLayoutCount = m_DescriptorSetLayouts.size();
+        layoutInfo.pSetLayouts = m_DescriptorSetLayouts.data();
         layoutInfo.pushConstantRangeCount = 0;
 
         auto layoutResult = GraphicsAPI::Device().createPipelineLayout(layoutInfo);
@@ -269,13 +611,28 @@ namespace Rose {
         GraphicsAPI::Device().destroyShaderModule(fragShaderModule);
     }
 
+    void Shader::BindDescriptorSet(U32 set) const
+    {
+        ASSERT(set < m_DescriptorSets.size(), "Descriptor set does not exist");
+
+        U32 frame = GraphicsAPI::FrameIndex();
+        ASSERT(frame < m_DescriptorSets[set].size(), "Invalid frame index");
+
+        vk::PipelineLayout layout = m_Layout;
+        vk::DescriptorSet descriptorSet = m_DescriptorSets[set][frame];
+
+        GraphicsAPI::Submit([layout, descriptorSet, set](vk::CommandBuffer cmdBuffer) {
+            cmdBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, layout, set, descriptorSet, {});
+        });
+    }
+
     std::vector<U32> Shader::Compile(const std::string& path, ShaderStage stage, const std::string& code)
     {
         shaderc::Compiler compiler;
         shaderc::CompileOptions options;
 
         shaderc::CompilationResult result =
-                compiler.CompileGlslToSpv(code.c_str(), TranslateShaderStage(stage), path.c_str(), options);
+                compiler.CompileGlslToSpv(code, TranslateShaderStage(stage), path.c_str(), options);
 
         ASSERT(result.GetCompilationStatus() == shaderc_compilation_status_success,
                std::string("Failed to compile shader to assembly, message: " + result.GetErrorMessage()));

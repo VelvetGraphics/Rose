@@ -32,8 +32,6 @@ namespace Rose {
 
             cmdBuf.pipelineBarrier2(dependencyInfo);
         }
-
-        constexpr U32 g_MaxFramesInFlight = 2;
     } // namespace
 
     GraphicsAPI::GraphicsAPI(GLFWwindow* window) : m_Window(window) {}
@@ -75,14 +73,14 @@ namespace Rose {
         CreateDepthResources();
 
         Main::GetEventBus().Observe<WindowResizedEvent>(
-                [this](WindowResizedEvent& e) -> decltype(auto) { OnWindowResize(e); });
+                [this](const WindowResizedEvent& e) -> decltype(auto) { OnWindowResize(e); });
 
         return true;
     }
 
     bool GraphicsAPI::BeginFrame()
     {
-        m_FrameIndex = (m_FrameIndex + 1) % g_MaxFramesInFlight;
+        m_FrameIndex = (m_FrameIndex + 1) % s_MaxFramesInFlight;
 
         auto drawFinishedResult = m_Device.waitForFences(m_InFlightFences[m_FrameIndex], vk::True, U64Limit);
         if (drawFinishedResult != vk::Result::eSuccess)
@@ -249,7 +247,7 @@ namespace Rose {
         ASSERT(false, "Failed to find suitable image format");
     }
 
-    void GraphicsAPI::OnWindowResize(WindowResizedEvent& e)
+    void GraphicsAPI::OnWindowResize(const WindowResizedEvent& e)
     {
         if (e.GetWidth() == 0 || e.GetHeight() == 0)
             return;
@@ -337,7 +335,7 @@ namespace Rose {
 
         vk::CommandBufferAllocateInfo allocInfo = {};
         allocInfo.commandPool = m_GraphicsCmdPool;
-        allocInfo.commandBufferCount = g_MaxFramesInFlight;
+        allocInfo.commandBufferCount = s_MaxFramesInFlight;
         allocInfo.level = vk::CommandBufferLevel::ePrimary;
 
         auto cmdBufferResult = m_Device.allocateCommandBuffers(allocInfo);
@@ -364,7 +362,7 @@ namespace Rose {
         vk::FenceCreateInfo fenceInfo = {};
         fenceInfo.flags = vk::FenceCreateFlagBits::eSignaled;
 
-        for (U32 i = 0; i < g_MaxFramesInFlight; i++)
+        for (U32 i = 0; i < s_MaxFramesInFlight; i++)
         {
             auto semaphoreResult = m_Device.createSemaphore(semaphoreInfo);
             ASSERT(semaphoreResult.result == vk::Result::eSuccess, "Failed to create semaphore");

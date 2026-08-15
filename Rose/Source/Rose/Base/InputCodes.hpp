@@ -4,7 +4,7 @@ namespace Rose {
     // From glfw3.h
 
     namespace Key {
-        enum Key
+        enum Key : U16
         {
             HAT_CENTERED = 0,
             HAT_UP = 1,
@@ -15,8 +15,6 @@ namespace Rose {
             HAT_RIGHT_DOWN = HAT_RIGHT | HAT_DOWN,
             HAT_LEFT_UP = HAT_LEFT | HAT_UP,
             HAT_LEFT_DOWN = HAT_LEFT | HAT_DOWN,
-
-            KEY_UNKNOWN = -1,
 
             /* Printable keys */
             SPACE = 32,
@@ -145,7 +143,7 @@ namespace Rose {
             KEY_LAST = KEY_MENU,
         };
 
-        enum Mod
+        enum Mod : U8
         {
 
             SHIFT = 0x0001,
@@ -158,7 +156,7 @@ namespace Rose {
     } // namespace Key
 
     namespace Mouse {
-        enum Mouse
+        enum Mouse : U8
         {
             BUTTON_1 = 0,
             BUTTON_2 = 1,

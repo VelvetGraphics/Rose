@@ -3,6 +3,7 @@
 
 #include <entt/entt.hpp>
 
+#include "Rose/Scene/Camera.hpp"
 #include "Rose/Scene/Component.hpp"
 
 namespace Rose {
@@ -16,6 +17,8 @@ namespace Rose {
             return e;
         }
 
+        void DestroyEntity(entt::entity e) { m_Registry.destroy(e); }
+
         template<typename T>
         T& AddComponent(entt::entity e)
         {
@@ -28,6 +31,13 @@ namespace Rose {
         {
             ASSERT(!HasComponent<T>(e), "Entity already has component");
             return m_Registry.emplace<T>(e, std::forward<Args>(args)...);
+        }
+
+        template<typename T>
+        void RemoveComponent(entt::entity e)
+        {
+            ASSERT(HasComponent<T>(e), "Entity does NOT have component");
+            m_Registry.remove<T>(e);
         }
 
         template<typename T>
@@ -47,12 +57,12 @@ namespace Rose {
         template<typename T>
         bool HasComponent(entt::entity e) const
         {
-            return m_Registry.owned<T>(e);
+            return m_Registry.all_of<T>(e);
         }
 
         entt::registry& GetRegistry() { return m_Registry; }
 
-        void Render() {};
+        void Render();
 
     private:
         entt::registry m_Registry;

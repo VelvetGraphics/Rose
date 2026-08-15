@@ -25,6 +25,12 @@ if (MSVC)
 endif ()
 add_subdirectory(Vendor/shaderc)
 
+set(SPIRV_CROSS_EXCEPTIONS_TO_ASSERTIONS ON)
+set(SPIRV_CROSS_ENABLE_TESTS OFF)
+set(SPIRV_CROSS_ENABLE_HLSL OFF)
+set(SPIRV_CROSS_CLI OFF)
+add_subdirectory(Vendor/SPIRV-Cross)
+
 add_library(tiny_obj_loader STATIC Vendor/tiny_obj_loader/tiny_obj_loader/tiny_obj_loader.cpp)
 target_include_directories(tiny_obj_loader PUBLIC
         Vendor/tiny_obj_loader
@@ -36,6 +42,7 @@ target_link_libraries(Rose PUBLIC
         Vulkan::Vulkan
         vk-bootstrap
         shaderc
+        spirv-cross-core
         tiny_obj_loader
 )
 

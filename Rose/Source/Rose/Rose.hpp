@@ -7,6 +7,7 @@
 #include "Rose/Base/DeltaTime.hpp"
 #include "Rose/Base/Event.hpp"
 #include "Rose/Base/EventTypes.hpp"
+#include "Rose/Base/Input.hpp"
 #include "Rose/Base/InputCodes.hpp"
 #include "Rose/Base/Layer.hpp"
 #include "Rose/Base/Window.hpp"

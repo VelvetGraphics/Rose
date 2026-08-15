@@ -21,6 +21,7 @@ namespace Rose {
         static vk::Device Device() { return s_CurrentContext->m_Device; }
 
         static vk::CommandPool CmdPool() { return s_CurrentContext->m_GraphicsCmdPool; }
+        static U32 FrameIndex() { return s_CurrentContext->m_FrameIndex; }
 
         static vk::Format SwapChainSurfaceFormat();
         static vk::Extent2D SwapChainExtent() { return s_CurrentContext->m_SwapChain.extent; }
@@ -29,6 +30,8 @@ namespace Rose {
 
         static void Submit(std::function<void(vk::CommandBuffer)> cmd);
         static void SubmitSingleTime(const std::function<void(vk::CommandBuffer)>& cmd);
+
+        static constexpr U32 MaxFramesInFlight() { return s_MaxFramesInFlight; }
 
     private:
         void BootStrap();
@@ -43,7 +46,7 @@ namespace Rose {
         static vk::Format FindSupportedFormat(const std::vector<vk::Format>& candidates, vk::ImageTiling tiling,
                                               vk::FormatFeatureFlags features);
 
-        void OnWindowResize(WindowResizedEvent& e);
+        void OnWindowResize(const WindowResizedEvent& e);
 
     private:
         inline static GraphicsAPI* s_CurrentContext = nullptr;
@@ -65,6 +68,7 @@ namespace Rose {
         std::vector<vk::Image> m_SwapChainImages;
         std::vector<vk::ImageView> m_SwapChainImageViews;
         U32 m_ImageIndex = 0;
+        static constexpr U32 s_MaxFramesInFlight = 2;
 
         vk::CommandPool m_GraphicsCmdPool;
         vk::CommandPool m_TransferCmdPool;
