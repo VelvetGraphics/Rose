@@ -20,7 +20,7 @@ namespace Rose {
         static void OnWindowClose(WindowClosedEvent&) { Close(); }
 
         static Main* Instance() { return s_Instance; }
-        static Ref<Window> GetWindow() { return s_Instance->m_Window; }
+        static Ref<Window>& GetWindow() { return s_Instance->m_Window; }
         static EventBus& GetEventBus() { return s_Instance->m_EventBus; }
 
         void PushLayer(Layer* layer) { m_LayerStack.PushLayer(layer); }

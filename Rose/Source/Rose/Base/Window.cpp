@@ -28,6 +28,12 @@ namespace Rose {
             Close();
     }
 
+    void Window::SetMouseMode(MouseMode mode)
+    {
+        m_MouseMode = mode;
+        glfwSetInputMode(m_Window, GLFW_CURSOR, mode == MouseMode::Normal ? GLFW_CURSOR_NORMAL : GLFW_CURSOR_DISABLED);
+    }
+
     void Window::Close()
     {
         glfwDestroyWindow(m_Window);

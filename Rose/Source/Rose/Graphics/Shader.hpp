@@ -161,7 +161,7 @@ namespace Rose {
         const U32 frame = GraphicsAPI::FrameIndex();
         ASSERT(frame < mappedIt->second.size(), "Invalid frame index");
 
-        memmove(mappedIt->second[frame], ubo, resource.Size);
+        memcpy(mappedIt->second[frame], ubo, resource.Size);
     }
 } // namespace Rose
 

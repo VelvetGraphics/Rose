@@ -38,6 +38,9 @@ namespace Rose {
 
     GraphicsAPI::~GraphicsAPI()
     {
+        SavePipelineCache();
+        m_Device.destroyPipelineCache(m_PipelineCache);
+
         m_Device.destroyImageView(m_DepthImageView);
         m_Device.freeMemory(m_DepthImageMemory);
         m_Device.destroyImage(m_DepthImage);
@@ -71,6 +74,7 @@ namespace Rose {
         CreateCmdBuffers();
         CreateSyncObjects();
         CreateDepthResources();
+        CreatePipelineCache();
 
         Main::GetEventBus().Observe<WindowResizedEvent>(
                 [this](const WindowResizedEvent& e) -> decltype(auto) { OnWindowResize(e); });
@@ -260,6 +264,43 @@ namespace Rose {
 
         CreateDepthResources();
     }
+    void GraphicsAPI::SavePipelineCache() const
+    {
+        if (!m_PipelineCache)
+            return;
+
+        auto cacheData = m_Device.getPipelineCacheData(m_PipelineCache).value;
+        std::streamsize dataSize = cacheData.size();
+
+        std::filesystem::create_directories(".Cache");
+        std::filesystem::create_directories(".Cache/Vulkan");
+
+        std::ofstream file(s_PipelineCachePath, std::ios::binary | std::ios::trunc);
+        ASSERT(file.is_open(), "Failed to open pipeline cache file");
+
+        file.write(reinterpret_cast<const char*>(cacheData.data()), dataSize);
+    }
+
+    std::vector<U8> GraphicsAPI::LoadPipelineCache()
+    {
+        std::ifstream file(s_PipelineCachePath, std::ios::binary | std::ios::ate);
+        if (!file.is_open())
+            return {};
+
+        const std::streamsize size = file.tellg();
+        if (size <= 0)
+            return {};
+
+        std::vector<U8> data(static_cast<size_t>(size));
+
+        file.seekg(0);
+        file.read(reinterpret_cast<char*>(data.data()), size);
+
+        if (!file)
+            return {};
+
+        return data;
+    }
 
     void GraphicsAPI::BootStrap()
     {
@@ -388,6 +429,22 @@ namespace Rose {
                 vk::MemoryPropertyFlagBits::eDeviceLocal);
 
         m_DepthImageView = VulkanCall::CreateImageView(m_DepthImage, m_DepthFormat, vk::ImageAspectFlagBits::eDepth);
+    }
+
+    void GraphicsAPI::CreatePipelineCache()
+    {
+        std::vector<U8> initialData = LoadPipelineCache();
+
+        vk::PipelineCacheCreateInfo cacheInfo = {};
+        if (!initialData.empty())
+        {
+            cacheInfo.initialDataSize = initialData.size();
+            cacheInfo.pInitialData = initialData.data();
+        }
+
+        auto result = m_Device.createPipelineCache(cacheInfo);
+        ASSERT(result.result == vk::Result::eSuccess, "Failed to create pipeline cache");
+        m_PipelineCache = result.value;
     }
 
     void GraphicsAPI::RecreateSwapChain()

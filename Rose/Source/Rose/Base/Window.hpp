@@ -17,6 +17,12 @@ namespace Rose {
         bool Fullscreen = false;
     };
 
+    enum class MouseMode : U8
+    {
+        Normal,
+        Captured
+    };
+
     class Window final : public RefCounted
     {
         using EventCallbackFunc = std::function<void(std::unique_ptr<Event>)>;
@@ -28,6 +34,9 @@ namespace Rose {
     public:
         explicit Window(const WindowInfo& info);
         ~Window() override;
+
+        MouseMode GetMouseMode() const { return m_MouseMode; }
+        void SetMouseMode(MouseMode mode);
 
         void Close();
         bool IsOpen() const { return m_Open; }
@@ -55,6 +64,7 @@ namespace Rose {
     private:
         GLFWwindow* m_Window;
         bool m_Open = false;
+        MouseMode m_MouseMode;
 
         struct WindowData
         {

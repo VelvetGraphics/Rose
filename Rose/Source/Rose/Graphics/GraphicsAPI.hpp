@@ -33,11 +33,14 @@ namespace Rose {
 
         static constexpr U32 MaxFramesInFlight() { return s_MaxFramesInFlight; }
 
+        static vk::PipelineCache PipelineCache() { return s_CurrentContext->m_PipelineCache; }
+
     private:
         void BootStrap();
         void CreateCmdBuffers();
         void CreateSyncObjects();
         void CreateDepthResources();
+        void CreatePipelineCache();
 
         void RecreateSwapChain();
 
@@ -47,6 +50,9 @@ namespace Rose {
                                               vk::FormatFeatureFlags features);
 
         void OnWindowResize(const WindowResizedEvent& e);
+
+        void SavePipelineCache() const;
+        static std::vector<U8> LoadPipelineCache();
 
     private:
         inline static GraphicsAPI* s_CurrentContext = nullptr;
@@ -84,5 +90,8 @@ namespace Rose {
         vk::DeviceMemory m_DepthImageMemory;
         vk::ImageView m_DepthImageView;
         vk::Format m_DepthFormat = vk::Format::eUndefined;
+
+        vk::PipelineCache m_PipelineCache;
+        static constexpr const char* s_PipelineCachePath = ".Cache/Vulkan/PipelineCache.bin";
     };
 } // namespace Rose

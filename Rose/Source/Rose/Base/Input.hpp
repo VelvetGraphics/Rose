@@ -19,5 +19,12 @@ namespace Rose {
         {
             return glfwGetMouseButton(Main::GetWindow()->GetNativeWindow(), button) != GLFW_RELEASE;
         }
+
+        static glm::vec2 GetMousePos()
+        {
+            glm::dvec2 pos;
+            glfwGetCursorPos(Main::GetWindow()->GetNativeWindow(), &pos.x, &pos.y);
+            return pos;
+        }
     };
 } // namespace Rose

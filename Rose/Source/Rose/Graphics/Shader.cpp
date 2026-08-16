@@ -90,7 +90,6 @@ namespace Rose {
         }
 
         // TODO: Other types
-        // TODO: Merge multiple stages
         std::map<ShaderResourceKey, ShaderResource> Reflect(const std::vector<U32>& vertSpirv,
                                                             const std::vector<U32>& fragSpirv)
         {
@@ -310,7 +309,7 @@ namespace Rose {
         if (m_Resources.empty())
             return;
 
-        const U32 frameCount = GraphicsAPI::MaxFramesInFlight();
+        constexpr U32 frameCount = GraphicsAPI::MaxFramesInFlight();
 
         U32 maxSet = 0;
 
@@ -603,7 +602,7 @@ namespace Rose {
         pipelineRendering.pColorAttachmentFormats = &colorAttachmentFormat;
         pipelineRendering.depthAttachmentFormat = GraphicsAPI::DepthFormat();
 
-        auto pipelineResult = GraphicsAPI::Device().createGraphicsPipeline(nullptr, pipelineInfo);
+        auto pipelineResult = GraphicsAPI::Device().createGraphicsPipeline(GraphicsAPI::PipelineCache(), pipelineInfo);
         ASSERT(pipelineResult.result == vk::Result::eSuccess, "Failed to create graphics pipeline");
         m_Pipeline = pipelineResult.value;
 
@@ -628,8 +627,17 @@ namespace Rose {
 
     std::vector<U32> Shader::Compile(const std::string& path, ShaderStage stage, const std::string& code)
     {
+        static std::unordered_map<std::string, std::pair<ShaderStage, std::vector<U32>>> s_Cached;
+        auto it = s_Cached.find(code);
+        if (it != s_Cached.end() && it->second.first == stage)
+        {
+            return it->second.second;
+        }
+
         shaderc::Compiler compiler;
         shaderc::CompileOptions options;
+
+        options.SetOptimizationLevel(shaderc_optimization_level_performance);
 
         shaderc::CompilationResult result =
                 compiler.CompileGlslToSpv(code, TranslateShaderStage(stage), path.c_str(), options);
@@ -637,7 +645,11 @@ namespace Rose {
         ASSERT(result.GetCompilationStatus() == shaderc_compilation_status_success,
                std::string("Failed to compile shader to assembly, message: " + result.GetErrorMessage()));
 
-        return {result.cbegin(), result.cend()};
+        std::vector<U32> spirv = {result.cbegin(), result.cend()};
+
+        s_Cached.insert({code, {stage, spirv}});
+
+        return spirv;
     }
 
     Ref<Shader> Shader::Create(std::string path) { return Ref<Shader>::Create(std::move(path)); }
