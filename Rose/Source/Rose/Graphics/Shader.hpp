@@ -105,11 +105,9 @@ namespace Rose {
         void Bind() const;
         void Reload();
 
-        // TODO: Write to all frames
         template<typename T>
         void SetUBO(ShaderResourceKey key, T* ubo);
 
-        // TODO: Write to all frames
         void SetTexture(ShaderResourceKey key, const Ref<Texture>& texture) const;
 
         const std::string& GetPath() { return m_Path; }

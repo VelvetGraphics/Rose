@@ -173,7 +173,7 @@ namespace Rose {
             DestroyResources();
         }
 
-        std::ifstream file(m_Path, std::ios::ate);
+        std::ifstream file(m_Path, std::ios::ate | std::ios::binary);
         ASSERT(file.is_open(), std::string("Failed to open file at path: " + m_Path));
 
         S64 fileSize = file.tellg();
