@@ -26,31 +26,15 @@ namespace Rose {
             FarPlane = far;
         }
 
-        [[nodiscard]] glm::mat4 GetViewMatrix() const
-        {
-            glm::quat rotation = Rotation();
+        [[nodiscard]] glm::mat4 GetViewMatrix() const;
+        [[nodiscard]] glm::mat4 GetProjectionMatrix() const;
 
-            glm::vec3 forward = rotation * glm::vec3(0.0f, 0.0f, -1.0f);
-            glm::vec3 up = rotation * glm::vec3(0.0f, 1.0f, 0.0f);
-
-            glm::mat4 viewMatrix = glm::lookAt(Position, Position + forward, up);
-
-            return viewMatrix;
-        }
-
-        [[nodiscard]] glm::mat4 GetProjectionMatrix() const
-        {
-            glm::mat4 projectionMatrix = glm::perspective(glm::radians(FieldOfView), AspectRatio, NearPlane, FarPlane);
-            projectionMatrix[1][1] *= -1;
-            return projectionMatrix;
-        }
-
-        glm::vec3 GetForward() const { return glm::normalize(Rotation() * glm::vec3(0.0f, 0.0f, -1.0f)); }
-        glm::vec3 GetRight() const { return normalize(Rotation() * glm::vec3(1.0f, 0.0f, 0.0f)); }
-        glm::vec3 GetUp() const { return glm::normalize(Rotation() * glm::vec3(0.0f, 1.0f, 0.0f)); }
+        [[nodiscard]] glm::vec3 GetForward() const { return glm::normalize(Rotation() * glm::vec3(0.0f, 0.0f, -1.0f)); }
+        [[nodiscard]] glm::vec3 GetRight() const { return normalize(Rotation() * glm::vec3(1.0f, 0.0f, 0.0f)); }
+        [[nodiscard]] glm::vec3 GetUp() const { return glm::normalize(Rotation() * glm::vec3(0.0f, 1.0f, 0.0f)); }
 
     private:
-        glm::quat Rotation() const
+        [[nodiscard]] glm::quat Rotation() const
         {
             glm::quat yaw = glm::angleAxis(glm::radians(Yaw), glm::vec3(0.0f, 1.0f, 0.0f));
             glm::quat pitch = glm::angleAxis(glm::radians(Pitch), glm::vec3(1.0f, 0.0f, 0.0f));

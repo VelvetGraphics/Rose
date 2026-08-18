@@ -116,12 +116,11 @@ namespace Rose {
         auto [buffer, bufferMemory] = VulkanCall::CreateBuffer(size, usage | vk::BufferUsageFlagBits::eTransferDst,
                                                                vk::MemoryPropertyFlagBits::eDeviceLocal);
 
-        GraphicsAPI::SubmitSingleTime([stagingBuffer, buffer, size](vk::CommandBuffer cmdBuffer) {
-            vk::BufferCopy region = {};
-            region.size = size;
-
-            cmdBuffer.copyBuffer(stagingBuffer, buffer, region);
-        });
+        GraphicsAPI::SubmitSingleTime(
+                [&](vk::CommandBuffer cmdBuffer) {
+                    VulkanCall::CopyBuffer(cmdBuffer, stagingBuffer, 0, buffer, 0, size);
+                },
+                QueueType::Transfer);
 
         GraphicsAPI::Device().freeMemory(stagingBufferMemory);
         GraphicsAPI::Device().destroyBuffer(stagingBuffer);

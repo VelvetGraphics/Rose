@@ -19,6 +19,7 @@
 
 #include "Rose/Graphics/Mesh.hpp"
 #include "Rose/Graphics/Shader.hpp"
+#include "Rose/Graphics/Texture.hpp"
 
 #include <entt/entt.hpp>
 

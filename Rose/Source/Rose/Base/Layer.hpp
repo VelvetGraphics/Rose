@@ -7,9 +7,6 @@ namespace Rose {
     public:
         virtual ~Layer() = default;
 
-        virtual void OnAttach() {}
-        virtual void OnDetach() {}
-
         virtual void OnTick(float dt) {}
         virtual void OnUpdate(float dt) {}
         virtual void OnRender() {}
@@ -24,8 +21,6 @@ namespace Rose {
 
         void PushLayer(Layer* layer)
         {
-            layer->OnAttach();
-
             m_Layers.emplace(m_Layers.begin() + m_LayerIndex, layer);
             m_LayerIndex++;
         }
@@ -34,25 +29,19 @@ namespace Rose {
         {
             if (auto it = std::ranges::find(m_Layers, layer); it != m_Layers.end())
             {
-                layer->OnDetach();
                 delete layer;
                 m_Layers.erase(it);
                 m_LayerIndex--;
             }
         }
 
-        void PushOverlay(Layer* overlay)
-        {
-            overlay->OnAttach();
-            m_Layers.push_back(overlay);
-        }
+        void PushOverlay(Layer* overlay) { m_Layers.push_back(overlay); }
 
         void PopOverlay(Layer* overlay)
         {
 
             if (auto it = std::ranges::find(m_Layers, overlay); it != m_Layers.end())
             {
-                overlay->OnDetach();
                 delete overlay;
                 m_Layers.erase(it);
             }
@@ -61,10 +50,7 @@ namespace Rose {
         void Clear()
         {
             for (auto it = m_Layers.rbegin(); it != m_Layers.rend(); ++it)
-            {
-                (*it)->OnDetach();
                 delete (*it);
-            }
 
             m_Layers.clear();
         }

@@ -13,6 +13,7 @@
 #include "Rose/Graphics/GraphicsAPI.hpp"
 
 namespace Rose {
+    class Texture;
     using ShaderResourceKey = std::pair<U32, U32>;
 
     struct ShaderResource
@@ -104,8 +105,12 @@ namespace Rose {
         void Bind() const;
         void Reload();
 
+        // TODO: Write to all frames
         template<typename T>
         void SetUBO(ShaderResourceKey key, T* ubo);
+
+        // TODO: Write to all frames
+        void SetTexture(ShaderResourceKey key, const Ref<Texture>& texture) const;
 
         const std::string& GetPath() { return m_Path; }
         void SetPath(std::string path) { m_Path = std::move(path); }

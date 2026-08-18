@@ -134,8 +134,9 @@ namespace Rose {
 
         m_CmdBuffers[m_FrameIndex].beginRendering(renderingInfo);
 
-        m_CmdBuffers[m_FrameIndex].setViewport(0, vk::Viewport{0.0f, 0.0f, static_cast<float>(m_SwapChain.extent.width),
-                                                               static_cast<float>(m_SwapChain.extent.height)});
+        m_CmdBuffers[m_FrameIndex].setViewport(0,
+                                               vk::Viewport{0.0f, 0.0f, static_cast<float>(m_SwapChain.extent.width),
+                                                            static_cast<float>(m_SwapChain.extent.height), 0.0f, 1.0f});
         m_CmdBuffers[m_FrameIndex].setScissor(0, vk::Rect2D{vk::Offset2D{0, 0}, m_SwapChain.extent});
 
         ASSERT(m_Device.resetFences(m_InFlightFences[m_FrameIndex]) == vk::Result::eSuccess, "Failed to reset fences");
@@ -200,14 +201,25 @@ namespace Rose {
         s_CurrentContext->m_Commands.emplace_back(std::move(cmd));
     }
 
-    void GraphicsAPI::SubmitSingleTime(const std::function<void(vk::CommandBuffer)>& cmd)
+    void GraphicsAPI::SubmitSingleTime(const std::function<void(vk::CommandBuffer)>& cmd, QueueType type)
     {
         vk::CommandBufferAllocateInfo allocInfo = {};
-        allocInfo.commandPool = s_CurrentContext->m_TransferCmdPool;
         allocInfo.level = vk::CommandBufferLevel::ePrimary;
         allocInfo.commandBufferCount = 1;
 
-        vk::CommandBuffer cmdBuffer = Device().allocateCommandBuffers(allocInfo).value[0];
+        switch (type)
+        {
+            case QueueType::Graphics:
+                allocInfo.commandPool = s_CurrentContext->m_GraphicsCmdPool;
+                break;
+            case QueueType::Transfer:
+                allocInfo.commandPool = s_CurrentContext->m_TransferCmdPool;
+                break;
+        }
+
+        auto allocResult = Device().allocateCommandBuffers(allocInfo);
+        ASSERT(allocResult.result == vk::Result::eSuccess, "Failed to allocate command buffer");
+        vk::CommandBuffer cmdBuffer = allocResult.value[0];
 
         vk::CommandBufferBeginInfo begin = {};
         begin.flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit;
@@ -219,11 +231,34 @@ namespace Rose {
         vk::SubmitInfo submitInfo = {};
         submitInfo.commandBufferCount = 1;
         submitInfo.pCommandBuffers = &cmdBuffer;
-        ASSERT(s_CurrentContext->m_TransferQueue.submit(submitInfo) == vk::Result::eSuccess,
-               "Failed to submit single time commands to queue");
 
-        ASSERT(s_CurrentContext->m_TransferQueue.waitIdle() == vk::Result::eSuccess, "Failed to wait for queue idle");
-        Device().freeCommandBuffers(s_CurrentContext->m_TransferCmdPool, cmdBuffer);
+        switch (type)
+        {
+            case QueueType::Graphics: {
+
+                ASSERT(s_CurrentContext->m_GraphicsQueue.submit(submitInfo) == vk::Result::eSuccess,
+                       "Failed to submit single time commands to graphics queue");
+
+                ASSERT(s_CurrentContext->m_GraphicsQueue.waitIdle() == vk::Result::eSuccess,
+                       "Failed to wait for graphics queue idle");
+
+                Device().freeCommandBuffers(s_CurrentContext->m_GraphicsCmdPool, cmdBuffer);
+
+                break;
+            }
+
+            case QueueType::Transfer: {
+                ASSERT(s_CurrentContext->m_TransferQueue.submit(submitInfo) == vk::Result::eSuccess,
+                       "Failed to submit single time commands to transfer queue");
+
+                ASSERT(s_CurrentContext->m_TransferQueue.waitIdle() == vk::Result::eSuccess,
+                       "Failed to wait for transfer queue idle");
+
+                Device().freeCommandBuffers(s_CurrentContext->m_TransferCmdPool, cmdBuffer);
+
+                break;
+            }
+        }
     }
 
     void GraphicsAPI::ExecCommands()
@@ -264,6 +299,7 @@ namespace Rose {
 
         CreateDepthResources();
     }
+
     void GraphicsAPI::SavePipelineCache() const
     {
         if (!m_PipelineCache)
@@ -318,6 +354,9 @@ namespace Rose {
         glfwCreateWindowSurface(m_Instance, m_Window, nullptr, &rawSurface);
         m_Surface = rawSurface;
 
+        VkPhysicalDeviceFeatures pdFeatures = {};
+        pdFeatures.samplerAnisotropy = true;
+
         VkPhysicalDeviceVulkan13Features features13 = {};
         features13.synchronization2 = vk::True;
         features13.dynamicRendering = vk::True;
@@ -325,6 +364,7 @@ namespace Rose {
         vkb::PhysicalDeviceSelector physicalDeviceSelector(m_Instance);
         auto pdResult = physicalDeviceSelector.set_surface(m_Surface)
                                 .set_minimum_version(1, 1)
+                                .set_required_features(pdFeatures)
                                 .set_required_features_13(features13)
                                 .require_dedicated_transfer_queue()
                                 .select();

@@ -31,7 +31,17 @@ namespace Rose {
         return {buffer, bufferMemory};
     }
 
-    void VulkanCall::CopyBuffer(vk::Buffer src, vk::Buffer dst, vk::DeviceSize size) {}
+    void VulkanCall::CopyBuffer(vk::CommandBuffer cmdBuffer, vk::Buffer src, vk::DeviceSize srcOffset, vk::Buffer dst,
+                                vk::DeviceSize dstOffset, vk::DeviceSize size)
+    {
+        vk::BufferCopy region = {};
+        region.size = size;
+        region.srcOffset = srcOffset;
+        region.dstOffset = dstOffset;
+
+        cmdBuffer.copyBuffer(src, dst, region);
+    }
+
     std::pair<vk::Image, vk::DeviceMemory> VulkanCall::CreateImage(vk::Extent3D extent, vk::Format format,
                                                                    vk::ImageTiling tiling, vk::ImageUsageFlags usage,
                                                                    vk::MemoryPropertyFlags memProps)
@@ -65,6 +75,23 @@ namespace Rose {
         return {image, imageMemory};
     }
 
+    void VulkanCall::CopyBufferToImage(vk::CommandBuffer cmdBuffer, vk::Buffer buffer, vk::Image image,
+                                       vk::Extent3D extent, vk::ImageAspectFlags aspect)
+    {
+        vk::BufferImageCopy region = {};
+        region.bufferOffset = 0;
+        region.bufferRowLength = 0;
+        region.bufferImageHeight = 0;
+        region.imageSubresource.aspectMask = aspect;
+        region.imageSubresource.baseArrayLayer = 0;
+        region.imageSubresource.layerCount = 1;
+        region.imageSubresource.mipLevel = 0;
+        region.imageOffset = vk::Offset3D{0, 0, 0};
+        region.imageExtent = extent;
+
+        cmdBuffer.copyBufferToImage(buffer, image, vk::ImageLayout::eTransferDstOptimal, region);
+    }
+
     vk::ImageView VulkanCall::CreateImageView(vk::Image image, vk::Format format, vk::ImageAspectFlags aspect)
     {
         vk::ImageViewCreateInfo viewInfo = {};
@@ -95,5 +122,46 @@ namespace Rose {
         }
 
         ASSERT(false, "No suitable memory type;");
+    }
+
+    void VulkanCall::TransitionImageLayout(vk::CommandBuffer cmdBuffer, vk::Image image, vk::ImageLayout oldLayout,
+                                           vk::ImageLayout newLayout, vk::ImageAspectFlags aspect)
+    {
+        vk::ImageMemoryBarrier barrier = {};
+        barrier.oldLayout = oldLayout;
+        barrier.newLayout = newLayout;
+        barrier.srcQueueFamilyIndex = vk::QueueFamilyIgnored;
+        barrier.dstQueueFamilyIndex = vk::QueueFamilyIgnored;
+        barrier.image = image;
+        barrier.subresourceRange.aspectMask = aspect;
+        barrier.subresourceRange.layerCount = 1;
+        barrier.subresourceRange.levelCount = 1;
+
+        vk::PipelineStageFlags sourceStage;
+        vk::PipelineStageFlags destinationStage;
+
+        if (oldLayout == vk::ImageLayout::eUndefined && newLayout == vk::ImageLayout::eTransferDstOptimal)
+        {
+            barrier.srcAccessMask = {};
+            barrier.dstAccessMask = vk::AccessFlagBits::eTransferWrite;
+
+            sourceStage = vk::PipelineStageFlagBits::eTopOfPipe;
+            destinationStage = vk::PipelineStageFlagBits::eTransfer;
+        }
+        else if (oldLayout == vk::ImageLayout::eTransferDstOptimal &&
+                 newLayout == vk::ImageLayout::eShaderReadOnlyOptimal)
+        {
+            barrier.srcAccessMask = vk::AccessFlagBits::eTransferWrite;
+            barrier.dstAccessMask = vk::AccessFlagBits::eShaderRead;
+
+            sourceStage = vk::PipelineStageFlagBits::eTransfer;
+            destinationStage = vk::PipelineStageFlagBits::eFragmentShader;
+        }
+        else
+        {
+            ASSERT(false, "Unsupported image layout transition");
+        }
+
+        cmdBuffer.pipelineBarrier(sourceStage, destinationStage, {}, {}, nullptr, barrier);
     }
 } // namespace Rose

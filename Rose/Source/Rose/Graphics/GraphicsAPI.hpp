@@ -3,6 +3,12 @@
 #include "Rose/Graphics/VulkanInclude.hpp"
 
 namespace Rose {
+    enum class QueueType : bool
+    {
+        Graphics = false,
+        Transfer = true
+    };
+
     class GraphicsAPI
     {
     public:
@@ -29,7 +35,7 @@ namespace Rose {
         static vk::Format DepthFormat() { return s_CurrentContext->m_DepthFormat; }
 
         static void Submit(std::function<void(vk::CommandBuffer)> cmd);
-        static void SubmitSingleTime(const std::function<void(vk::CommandBuffer)>& cmd);
+        static void SubmitSingleTime(const std::function<void(vk::CommandBuffer)>& cmd, QueueType type);
 
         static constexpr U32 MaxFramesInFlight() { return s_MaxFramesInFlight; }
 

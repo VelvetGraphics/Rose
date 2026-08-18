@@ -36,6 +36,11 @@ target_include_directories(tiny_obj_loader PUBLIC
         Vendor/tiny_obj_loader
 )
 
+add_library(stb_image STATIC  Vendor/stb_image/stb_image/stb_image.c)
+target_include_directories(stb_image PUBLIC
+    Vendor/stb_image
+)
+
 target_link_libraries(Rose PUBLIC
         spdlog
         glfw
@@ -44,6 +49,7 @@ target_link_libraries(Rose PUBLIC
         shaderc
         spirv-cross-core
         tiny_obj_loader
+        stb_image
 )
 
 file(GLOB_RECURSE ROSE_COMMON_INCLUDE Source/Rose/Common/CommonInclude.hpp)

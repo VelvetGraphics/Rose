@@ -2,6 +2,7 @@
 
 #include "Rose/Core/Core.hpp"
 #include "Rose/Graphics/GraphicsAPI.hpp"
+#include "Rose/Graphics/Texture.hpp"
 #include "Rose/Graphics/VulkanCall.hpp"
 #include "shaderc/shaderc.hpp"
 
@@ -83,25 +84,23 @@ namespace Rose {
         {
             U32 set = comp.get_decoration(resource.id, spv::Decoration::DecorationDescriptorSet);
             U32 binding = comp.get_decoration(resource.id, spv::Decoration::DecorationBinding);
-            size_t size = comp.get_declared_struct_size(comp.get_type(resource.base_type_id));
+
+            size_t size = 0;
+            if (type == vk::DescriptorType::eUniformBuffer)
+                size = comp.get_declared_struct_size(comp.get_type(resource.base_type_id));
 
             return {{set, binding},
                     {.Name = resource.name, .Type = type, .Set = set, .Binding = binding, .Size = size, .Stages = {}}};
         }
 
-        // TODO: Other types
-        std::map<ShaderResourceKey, ShaderResource> Reflect(const std::vector<U32>& vertSpirv,
-                                                            const std::vector<U32>& fragSpirv)
+        void FindResourcesFromStage(const spirv_cross::Compiler& comp, vk::ShaderStageFlags stage,
+                                    const spirv_cross::ShaderResources& resources,
+                                    std::map<ShaderResourceKey, ShaderResource>& result)
         {
-            spirv_cross::Compiler vertComp(vertSpirv);
-            spirv_cross::ShaderResources resources = vertComp.get_shader_resources();
-
-            std::map<ShaderResourceKey, ShaderResource> result;
-
             for (const auto& resource : resources.uniform_buffers)
             {
                 std::pair<ShaderResourceKey, ShaderResource> reflected =
-                        CreateResource(vertComp, resource, vk::DescriptorType::eUniformBuffer);
+                        CreateResource(comp, resource, vk::DescriptorType::eUniformBuffer);
                 auto [it, inserted] = result.try_emplace(reflected.first, reflected.second);
 
                 if (!inserted)
@@ -112,28 +111,42 @@ namespace Rose {
                            "Uniform buffer size differs between shader stages");
                 }
 
-                it->second.Stages |= vk::ShaderStageFlagBits::eVertex;
+                it->second.Stages |= stage;
             }
+
+            for (const auto& resource : resources.sampled_images)
+            {
+                std::pair<ShaderResourceKey, ShaderResource> reflected =
+                        CreateResource(comp, resource, vk::DescriptorType::eCombinedImageSampler);
+
+                auto [it, inserted] = result.try_emplace(reflected.first, reflected.second);
+
+                if (!inserted)
+                {
+                    ASSERT(it->second.Type == reflected.second.Type, "Descriptor type differs between shader stages");
+
+                    ASSERT(it->second.Size == reflected.second.Size,
+                           "Uniform buffer size differs between shader stages");
+                }
+
+                it->second.Stages |= stage;
+            }
+        }
+
+        std::map<ShaderResourceKey, ShaderResource> Reflect(const std::vector<U32>& vertSpirv,
+                                                            const std::vector<U32>& fragSpirv)
+        {
+            std::map<ShaderResourceKey, ShaderResource> result;
+
+            spirv_cross::Compiler vertComp(vertSpirv);
+            spirv_cross::ShaderResources resources = vertComp.get_shader_resources();
+
+            FindResourcesFromStage(vertComp, vk::ShaderStageFlagBits::eVertex, resources, result);
 
             spirv_cross::Compiler fragComp(fragSpirv);
             resources = fragComp.get_shader_resources();
 
-            for (const auto& resource : resources.uniform_buffers)
-            {
-                std::pair<ShaderResourceKey, ShaderResource> reflected =
-                        CreateResource(fragComp, resource, vk::DescriptorType::eUniformBuffer);
-                auto [it, inserted] = result.try_emplace(reflected.first, reflected.second);
-
-                if (!inserted)
-                {
-                    ASSERT(it->second.Type == reflected.second.Type, "Descriptor type differs between shader stages");
-
-                    ASSERT(it->second.Size == reflected.second.Size,
-                           "Uniform buffer size differs between shader stages");
-                }
-
-                it->second.Stages |= vk::ShaderStageFlagBits::eFragment;
-            }
+            FindResourcesFromStage(fragComp, vk::ShaderStageFlagBits::eFragment, resources, result);
 
             return result;
         }
@@ -185,6 +198,24 @@ namespace Rose {
         CreateGraphicsPipeline(std::move(vertShaderBytecode), std::move(fragShaderBytecode));
 
         m_Loaded = true;
+    }
+
+    void Shader::SetTexture(ShaderResourceKey key, const Ref<Texture>& texture) const
+    {
+        vk::DescriptorImageInfo imageInfo{};
+        imageInfo.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
+        imageInfo.imageView = texture->m_ImageView;
+        imageInfo.sampler = texture->m_Sampler;
+
+        vk::WriteDescriptorSet write{};
+        write.dstSet = m_DescriptorSets.at(key.first).at(GraphicsAPI::FrameIndex());
+        write.dstBinding = key.second;
+        write.dstArrayElement = 0;
+        write.descriptorCount = 1;
+        write.descriptorType = vk::DescriptorType::eCombinedImageSampler;
+        write.pImageInfo = &imageInfo;
+
+        GraphicsAPI::Device().updateDescriptorSets(write, {});
     }
 
     ShaderSources Shader::PreProcess(const std::string& code)
@@ -411,11 +442,11 @@ namespace Rose {
 
         for (const auto& resource : m_Resources | std::views::values)
         {
+            ShaderResourceKey key = resource.Key();
+
             switch (resource.Type)
             {
                 case vk::DescriptorType::eUniformBuffer: {
-                    const ShaderResourceKey key = resource.Key();
-
                     for (U32 frame = 0; frame < frameCount; ++frame)
                     {
                         vk::DescriptorBufferInfo bufferInfo{};
@@ -439,6 +470,10 @@ namespace Rose {
                     break;
                 }
 
+                case vk::DescriptorType::eCombinedImageSampler: {
+                    break;
+                }
+
                 default:
                     ASSERT(false, "Unsupported descriptor type");
 
@@ -453,32 +488,42 @@ namespace Rose {
 
         for (const auto& resource : m_Resources | std::views::values)
         {
-            ASSERT(resource.Type == vk::DescriptorType::eUniformBuffer,
-                   "CreateUniformObjects received a non-uniform-buffer resource");
+            ShaderResourceKey key = resource.Key();
 
-            const ShaderResourceKey key = resource.Key();
-
-            auto& buffers = m_UniformBuffers[key];
-            auto& memories = m_UniformBuffersMemory[key];
-            auto& mappedMemories = m_UniformBuffersMapped[key];
-
-            buffers.reserve(frameCount);
-            memories.reserve(frameCount);
-            mappedMemories.reserve(frameCount);
-
-            for (U32 frame = 0; frame < frameCount; frame++)
+            switch (resource.Type)
             {
-                auto [buffer, memory] = VulkanCall::CreateBuffer(resource.Size, vk::BufferUsageFlagBits::eUniformBuffer,
-                                                                 vk::MemoryPropertyFlagBits::eHostVisible |
-                                                                         vk::MemoryPropertyFlagBits::eHostCoherent);
+                case vk::DescriptorType::eUniformBuffer: {
+                    auto& buffers = m_UniformBuffers[key];
+                    auto& memories = m_UniformBuffersMemory[key];
+                    auto& mappedMemories = m_UniformBuffersMapped[key];
 
-                auto mapResult = GraphicsAPI::Device().mapMemory(memory, 0, resource.Size);
+                    buffers.reserve(frameCount);
+                    memories.reserve(frameCount);
+                    mappedMemories.reserve(frameCount);
 
-                ASSERT(mapResult.result == vk::Result::eSuccess, "Failed to map uniform buffer memory");
+                    for (U32 frame = 0; frame < frameCount; frame++)
+                    {
+                        auto [buffer, memory] = VulkanCall::CreateBuffer(
+                                resource.Size, vk::BufferUsageFlagBits::eUniformBuffer,
+                                vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
 
-                buffers.emplace_back(buffer);
-                memories.emplace_back(memory);
-                mappedMemories.emplace_back(mapResult.value);
+                        auto mapResult = GraphicsAPI::Device().mapMemory(memory, 0, resource.Size);
+
+                        ASSERT(mapResult.result == vk::Result::eSuccess, "Failed to map uniform buffer memory");
+
+                        buffers.emplace_back(buffer);
+                        memories.emplace_back(memory);
+                        mappedMemories.emplace_back(mapResult.value);
+                    }
+                    break;
+                }
+
+                case vk::DescriptorType::eCombinedImageSampler: {
+                    break;
+                }
+
+                default:
+                    ASSERT(false, "Unsupported resource type");
             }
         }
     }

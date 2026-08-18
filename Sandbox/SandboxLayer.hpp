@@ -4,7 +4,8 @@
 class SandboxLayer : public Rose::Layer
 {
 public:
-    void OnAttach() override;
+    SandboxLayer();
+
     void OnUpdate(float dt) override;
     void OnRender() override;
 
@@ -15,4 +16,6 @@ private:
 
     Rose::Scene m_Scene;
     Rose::Camera m_Camera;
+
+    Ref<Rose::Texture> m_Texture;
 };

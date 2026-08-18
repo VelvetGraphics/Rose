@@ -8,7 +8,7 @@ namespace {
     };
 } // namespace
 
-void SandboxLayer::OnAttach()
+SandboxLayer::SandboxLayer()
 {
     Rose::Main::GetEventBus().Observe<Rose::MouseMovedEvent>([this](Rose::MouseMovedEvent& e) { OnMouseMoved(e); });
 
@@ -19,6 +19,7 @@ void SandboxLayer::OnAttach()
                             0.01f, 1000.0f);
 
     Ref<Rose::Mesh> mesh = Rose::Mesh::Create("Assets/Models/Monkey.obj");
+    m_Texture = Rose::Texture::Create("Assets/Textures/Disco.jpg", {});
 
     for (U32 z = 0; z < 5; z++)
     {
@@ -86,7 +87,10 @@ void SandboxLayer::OnRender()
         MVP mvp{};
         mvp.Model = m_Scene.GetComponent<Rose::TransformComponent>(entity).Transform();
         mvp.ViewProjection = m_Camera.GetProjectionMatrix() * m_Camera.GetViewMatrix();
-        m_Scene.GetComponent<Rose::Renderer3DComponent>(entity).Shader->SetUBO<MVP>({0, 0}, &mvp);
+
+        auto& renderer3DComponent = m_Scene.GetComponent<Rose::Renderer3DComponent>(entity);
+        renderer3DComponent.Shader->SetUBO<MVP>({0, 0}, &mvp);
+        renderer3DComponent.Shader->SetTexture({0, 1}, m_Texture);
     }
 
     m_Scene.Render();
