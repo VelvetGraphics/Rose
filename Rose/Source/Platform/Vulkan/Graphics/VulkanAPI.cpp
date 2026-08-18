@@ -466,9 +466,9 @@ namespace Rose {
         std::tie(m_DepthImage, m_DepthImageMemory) = VulkanCall::CreateImage(
                 vk::Extent3D{m_SwapChain.extent.width, m_SwapChain.extent.height, 1}, m_DepthFormat,
                 vk::ImageTiling::eOptimal, vk::ImageUsageFlagBits::eDepthStencilAttachment,
-                vk::MemoryPropertyFlagBits::eDeviceLocal);
+                vk::MemoryPropertyFlagBits::eDeviceLocal, 1);
 
-        m_DepthImageView = VulkanCall::CreateImageView(m_DepthImage, m_DepthFormat, vk::ImageAspectFlagBits::eDepth);
+        m_DepthImageView = VulkanCall::CreateImageView(m_DepthImage, m_DepthFormat, 1, vk::ImageAspectFlagBits::eDepth);
     }
 
     void VulkanAPI::CreatePipelineCache()

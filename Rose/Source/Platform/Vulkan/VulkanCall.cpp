@@ -44,7 +44,7 @@ namespace Rose {
 
     std::pair<vk::Image, vk::DeviceMemory> VulkanCall::CreateImage(vk::Extent3D extent, vk::Format format,
                                                                    vk::ImageTiling tiling, vk::ImageUsageFlags usage,
-                                                                   vk::MemoryPropertyFlags memProps)
+                                                                   vk::MemoryPropertyFlags memProps, U32 mipLevels)
     {
         vk::ImageCreateInfo imageInfo = {};
         imageInfo.imageType = vk::ImageType::e2D;
@@ -54,7 +54,7 @@ namespace Rose {
         imageInfo.usage = usage;
         imageInfo.sharingMode = vk::SharingMode::eExclusive;
         imageInfo.arrayLayers = 1;
-        imageInfo.mipLevels = 1;
+        imageInfo.mipLevels = mipLevels;
         imageInfo.samples = vk::SampleCountFlagBits::e1;
 
         auto imageResult = VulkanAPI::Device().createImage(imageInfo);
@@ -92,7 +92,8 @@ namespace Rose {
         cmdBuffer.copyBufferToImage(buffer, image, vk::ImageLayout::eTransferDstOptimal, region);
     }
 
-    vk::ImageView VulkanCall::CreateImageView(vk::Image image, vk::Format format, vk::ImageAspectFlags aspect)
+    vk::ImageView VulkanCall::CreateImageView(vk::Image image, vk::Format format, U32 mipLevels,
+                                              vk::ImageAspectFlags aspect)
     {
         vk::ImageViewCreateInfo viewInfo = {};
         viewInfo.viewType = vk::ImageViewType::e2D;
@@ -101,7 +102,7 @@ namespace Rose {
         viewInfo.subresourceRange.aspectMask = aspect;
         viewInfo.subresourceRange.layerCount = 1;
         viewInfo.subresourceRange.baseArrayLayer = 0;
-        viewInfo.subresourceRange.levelCount = 1;
+        viewInfo.subresourceRange.levelCount = mipLevels;
         viewInfo.subresourceRange.baseMipLevel = 0;
 
         auto imageViewResult = VulkanAPI::Device().createImageView(viewInfo);
@@ -125,7 +126,7 @@ namespace Rose {
     }
 
     void VulkanCall::TransitionImageLayout(vk::CommandBuffer cmdBuffer, vk::Image image, vk::ImageLayout oldLayout,
-                                           vk::ImageLayout newLayout, vk::ImageAspectFlags aspect)
+                                           vk::ImageLayout newLayout, U32 mipLevels, vk::ImageAspectFlags aspect)
     {
         vk::ImageMemoryBarrier barrier = {};
         barrier.oldLayout = oldLayout;
@@ -135,7 +136,7 @@ namespace Rose {
         barrier.image = image;
         barrier.subresourceRange.aspectMask = aspect;
         barrier.subresourceRange.layerCount = 1;
-        barrier.subresourceRange.levelCount = 1;
+        barrier.subresourceRange.levelCount = mipLevels;
 
         vk::PipelineStageFlags sourceStage;
         vk::PipelineStageFlags destinationStage;

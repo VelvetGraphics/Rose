@@ -16,6 +16,7 @@ namespace Rose {
         void UnLoad();
 
         void CreateImage();
+        void GenerateMipMaps();
         void CreateSampler();
 
     private:
@@ -25,6 +26,10 @@ namespace Rose {
         vk::Image m_Image;
         vk::DeviceMemory m_ImageMemory;
         vk::ImageView m_ImageView;
+
+        U32 m_MipLevels = 0;
+        S32 m_MipWidth = 0;
+        S32 m_MipHeight = 0;
 
         bool m_Loaded = false;
 

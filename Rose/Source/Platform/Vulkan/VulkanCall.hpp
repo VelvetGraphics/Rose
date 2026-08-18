@@ -14,16 +14,17 @@ namespace Rose {
 
         static std::pair<vk::Image, vk::DeviceMemory> CreateImage(vk::Extent3D extent, vk::Format format,
                                                                   vk::ImageTiling tiling, vk::ImageUsageFlags usage,
-                                                                  vk::MemoryPropertyFlags memProps);
+                                                                  vk::MemoryPropertyFlags memProps, U32 mipLevels);
 
         static void CopyBufferToImage(vk::CommandBuffer cmdBuffer, vk::Buffer buffer, vk::Image image,
                                       vk::Extent3D extent, vk::ImageAspectFlags aspect);
 
-        static vk::ImageView CreateImageView(vk::Image image, vk::Format format, vk::ImageAspectFlags aspect);
+        static vk::ImageView CreateImageView(vk::Image image, vk::Format format, U32 mipLevels,
+                                             vk::ImageAspectFlags aspect);
 
         static U32 FindMemoryTypeIndex(U32 typeFilter, vk::MemoryPropertyFlags flags);
 
         static void TransitionImageLayout(vk::CommandBuffer cmdBuffer, vk::Image image, vk::ImageLayout oldLayout,
-                                          vk::ImageLayout newLayout, vk::ImageAspectFlags aspect);
+                                          vk::ImageLayout newLayout, U32 mipLevels, vk::ImageAspectFlags aspect);
     };
 } // namespace Rose
