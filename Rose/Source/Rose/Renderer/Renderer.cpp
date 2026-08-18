@@ -1,19 +1,16 @@
 #include "Renderer.hpp"
-#include "Rose/Graphics/GraphicsAPI.hpp"
+
+#include "Platform/Vulkan/Graphics/VulkanAPI.hpp"
 
 namespace Rose {
     bool Renderer::Init(GLFWwindow* window)
     {
-        s_GraphicsAPI = new GraphicsAPI(window);
+        s_GraphicsAPI = GraphicsAPI::Create(window);
         s_GraphicsAPI->MakeContextCurrent();
         return s_GraphicsAPI->Init();
     }
 
-    void Renderer::Shutdown()
-    {
-        if (s_GraphicsAPI)
-            delete s_GraphicsAPI;
-    }
+    void Renderer::Shutdown() { delete s_GraphicsAPI; }
 
     bool Renderer::BeginFrame() { return s_GraphicsAPI->BeginFrame(); }
 

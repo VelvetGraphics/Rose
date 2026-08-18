@@ -4,6 +4,7 @@
 #include <glm/gtc/quaternion.hpp>
 
 #include "Rose/Graphics/Mesh.hpp"
+#include "Rose/Graphics/Shader.hpp"
 
 namespace Rose {
     struct NameComponent

@@ -87,7 +87,7 @@ public:
 
     template<typename U>
         requires std::is_convertible_v<U*, T*>
-    explicit Ref(Ref<U>&& rhs)
+    Ref(Ref<U>&& rhs)
     {
         m_Data = rhs.m_Data;
         rhs.m_Data = nullptr;
@@ -115,7 +115,7 @@ public:
 
     template<typename U>
         requires std::is_convertible_v<U*, T*>
-    explicit Ref(const Ref<U>& other)
+    Ref(const Ref<U>& other)
     {
         m_Data = other.m_Data;
         if (m_Data)
@@ -150,7 +150,7 @@ public:
         return Ref(new T(std::forward<Args>(args)...));
     }
 
-    T* Raw() { return m_Data; }
+    T* Raw() const { return m_Data; }
 
     const T* operator->() const { return m_Data; }
     T* operator->() { return m_Data; }

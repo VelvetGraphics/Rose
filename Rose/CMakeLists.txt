@@ -1,9 +1,11 @@
 project(Rose)
 
 file(GLOB_RECURSE SOURCE Source/Rose/*.cpp)
+file(GLOB_RECURSE PLATFORM_SOURCE Source/Platform/*.cpp)
 
 add_library(Rose STATIC
         ${SOURCE}
+        ${PLATFORM_SOURCE}
 )
 target_include_directories(Rose PUBLIC
         Source

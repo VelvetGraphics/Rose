@@ -1,7 +1,5 @@
 #pragma once
 
-#include "Rose/Graphics/VulkanInclude.hpp"
-
 namespace Rose {
     enum class TextureFilter : U8
     {
@@ -32,32 +30,19 @@ namespace Rose {
     class Texture : public RefCounted
     {
     public:
-        ~Texture() override;
+        ~Texture() override = default;
+
         static Ref<Texture> Create(std::string path, TextureSamplerInfo samplerInfo);
 
-        void Reload();
+        virtual void Reload() = 0;
 
-    private:
-        void UnLoad();
+        const std::string& GetPath() { return m_Path; }
+        void SetPath(std::string path) { m_Path = std::move(path); }
 
-        Texture(std::string&& path, TextureSamplerInfo samplerInfo);
+    protected:
+        Texture(std::string&& path) : m_Path(path) {}
 
-        void CreateImage();
-        void CreateSampler();
-
-    private:
+    protected:
         std::string m_Path;
-
-        TextureSamplerInfo m_SamplerInfo;
-        vk::Sampler m_Sampler;
-
-        vk::Image m_Image;
-        vk::DeviceMemory m_ImageMemory;
-        vk::ImageView m_ImageView;
-
-        bool m_Loaded = false;
-
-        friend class Shader;
-        friend class Ref<Texture>;
     };
 } // namespace Rose

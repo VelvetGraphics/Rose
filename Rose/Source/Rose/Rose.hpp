@@ -12,6 +12,7 @@
 #include "Rose/Base/Layer.hpp"
 #include "Rose/Base/Window.hpp"
 
+#include "Rose/Scene/Camera.hpp"
 #include "Rose/Scene/Component.hpp"
 #include "Rose/Scene/Scene.hpp"
 

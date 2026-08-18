@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Rose/Graphics/VulkanInclude.hpp"
+#include "VulkanInclude.hpp"
 
 namespace Rose {
     class VulkanCall

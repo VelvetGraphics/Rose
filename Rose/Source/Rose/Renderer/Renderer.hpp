@@ -4,6 +4,7 @@ struct GLFWwindow;
 
 namespace Rose {
     class GraphicsAPI;
+    class VulkanAPI;
     class Renderer
     {
     public:

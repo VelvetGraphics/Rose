@@ -89,7 +89,7 @@ void SandboxLayer::OnRender()
         mvp.ViewProjection = m_Camera.GetProjectionMatrix() * m_Camera.GetViewMatrix();
 
         auto& renderer3DComponent = m_Scene.GetComponent<Rose::Renderer3DComponent>(entity);
-        renderer3DComponent.Shader->SetUBO<MVP>({0, 0}, &mvp);
+        renderer3DComponent.Shader->SetUBO({0, 0}, &mvp, sizeof(MVP));
         renderer3DComponent.Shader->SetTexture({0, 1}, m_Texture);
     }
 
