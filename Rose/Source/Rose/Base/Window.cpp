@@ -119,7 +119,7 @@ namespace Rose {
             data->EventCallbackFn(std::make_unique<WindowClosedEvent>(data->Self));
         });
 
-        glfwSetWindowSizeCallback(m_Window, [](GLFWwindow* window, int width, int height) {
+        glfwSetFramebufferSizeCallback(m_Window, [](GLFWwindow* window, int width, int height) {
             auto* data = static_cast<WindowData*>(glfwGetWindowUserPointer(window));
             data->Width = width;
             data->Height = height;

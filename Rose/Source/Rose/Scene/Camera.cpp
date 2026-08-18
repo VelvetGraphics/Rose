@@ -1,6 +1,23 @@
 #include "Camera.hpp"
 
+#include "Rose/Main/Main.hpp"
+
 namespace Rose {
+    Camera::Camera()
+    {
+        Main::GetEventBus().Observe<WindowResizedEvent>([this](WindowResizedEvent& e) {
+            AspectRatio = static_cast<float>(e.GetWidth()) / static_cast<float>(e.GetHeight());
+        });
+    }
+
+    Camera::Camera(float fov, float aspect, float near, float far) :
+        FieldOfView(fov), AspectRatio(aspect), NearPlane(near), FarPlane(far)
+    {
+        Main::GetEventBus().Observe<WindowResizedEvent>([this](WindowResizedEvent& e) {
+            AspectRatio = static_cast<float>(e.GetWidth()) / static_cast<float>(e.GetHeight());
+        });
+    }
+
     glm::mat4 Camera::GetViewMatrix() const
     {
         glm::quat rotation = Rotation();

@@ -18,6 +18,11 @@ namespace Rose {
         glm::vec3 Position{0.0f};
 
     public:
+        Camera();
+        Camera(float fov, float aspect, float near, float far);
+
+        ~Camera() = default;
+
         void SetPerspective(float fov, float aspect, float near, float far)
         {
             FieldOfView = fov;
