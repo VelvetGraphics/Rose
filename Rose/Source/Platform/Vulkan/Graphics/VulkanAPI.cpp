@@ -4,6 +4,8 @@
 #include "Rose/Core/Core.hpp"
 #include "Rose/Main/Main.hpp"
 
+#include <backends/imgui_impl_vulkan.h>
+
 namespace Rose {
     namespace {
         void TransitionImageLayout(vk::CommandBuffer cmdBuf, vk::Image image, vk::ImageLayout oldLayout,
@@ -86,76 +88,158 @@ namespace Rose {
     {
         m_FrameIndex = (m_FrameIndex + 1) % s_MaxFramesInFlight;
 
-        auto drawFinishedResult = m_Device.waitForFences(m_InFlightFences[m_FrameIndex], vk::True, U64Limit);
-        if (drawFinishedResult != vk::Result::eSuccess)
+        if (m_Device.waitForFences(m_InFlightFences[m_FrameIndex], vk::True, U64Limit) != vk::Result::eSuccess)
+        {
+            return false;
+        }
+
+        VkResult acquireResult =
+                vkAcquireNextImageKHR(m_Device, m_SwapChain.swapchain, U64Limit,
+                                      m_ImageAvailableSemaphores[m_FrameIndex], nullptr, &m_ImageIndex);
+
+        if (acquireResult == VK_ERROR_OUT_OF_DATE_KHR)
+        {
+            HandleSwapChainResize();
+            return false;
+        }
+
+        if (acquireResult != VK_SUCCESS && acquireResult != VK_SUBOPTIMAL_KHR)
+        {
+            return false;
+        }
+
+        vk::CommandBuffer cmd = m_CmdBuffers[m_FrameIndex];
+
+        if (cmd.reset() != vk::Result::eSuccess)
             return false;
 
-        vk::CommandBufferBeginInfo beginInfo = {};
-        if (m_CmdBuffers[m_FrameIndex].begin(beginInfo) != vk::Result::eSuccess)
+        vk::CommandBufferBeginInfo beginInfo{};
+
+        if (cmd.begin(beginInfo) != vk::Result::eSuccess)
             return false;
 
-        vkAcquireNextImageKHR(m_Device, m_SwapChain.swapchain, U64Limit, m_ImageAvailableSemaphores[m_FrameIndex],
-                              nullptr, &m_ImageIndex);
+        vk::ImageView sceneImageView;
 
-        vk::RenderingAttachmentInfo colorAttachment;
-        colorAttachment.clearValue = vk::ClearValue({0.0f, 0.0f, 0.0f, 1.0f});
+        if (m_Viewport)
+        {
+            sceneImageView = m_Viewport->m_ImageView;
+
+            vk::AccessFlags2 srcAccess = {};
+            vk::PipelineStageFlags2 srcStage = vk::PipelineStageFlagBits2::eTopOfPipe;
+
+            if (m_Viewport->m_Layout == vk::ImageLayout::eShaderReadOnlyOptimal)
+            {
+                srcAccess = vk::AccessFlagBits2::eShaderSampledRead;
+                srcStage = vk::PipelineStageFlagBits2::eFragmentShader;
+            }
+
+            TransitionImageLayout(cmd, m_Viewport->m_Image, m_Viewport->m_Layout,
+                                  vk::ImageLayout::eColorAttachmentOptimal, srcAccess,
+                                  vk::AccessFlagBits2::eColorAttachmentWrite, srcStage,
+                                  vk::PipelineStageFlagBits2::eColorAttachmentOutput, vk::ImageAspectFlagBits::eColor);
+
+            m_Viewport->m_Layout = vk::ImageLayout::eColorAttachmentOptimal;
+        }
+        else
+        {
+            sceneImageView = m_SwapChainImageViews[m_ImageIndex];
+
+            TransitionImageLayout(cmd, m_SwapChainImages[m_ImageIndex], vk::ImageLayout::eUndefined,
+                                  vk::ImageLayout::eColorAttachmentOptimal, {},
+                                  vk::AccessFlagBits2::eColorAttachmentWrite, vk::PipelineStageFlagBits2::eTopOfPipe,
+                                  vk::PipelineStageFlagBits2::eColorAttachmentOutput, vk::ImageAspectFlagBits::eColor);
+        }
+
+        TransitionImageLayout(
+                cmd, m_DepthImage, vk::ImageLayout::eUndefined, vk::ImageLayout::eDepthAttachmentOptimal, {},
+                vk::AccessFlagBits2::eDepthStencilAttachmentWrite, vk::PipelineStageFlagBits2::eTopOfPipe,
+                vk::PipelineStageFlagBits2::eEarlyFragmentTests | vk::PipelineStageFlagBits2::eLateFragmentTests,
+                vk::ImageAspectFlagBits::eDepth);
+
+        vk::RenderingAttachmentInfo colorAttachment{};
+        colorAttachment.imageView = sceneImageView;
         colorAttachment.imageLayout = vk::ImageLayout::eColorAttachmentOptimal;
-        colorAttachment.imageView = m_SwapChainImageViews[m_ImageIndex];
         colorAttachment.loadOp = vk::AttachmentLoadOp::eClear;
         colorAttachment.storeOp = vk::AttachmentStoreOp::eStore;
+        colorAttachment.clearValue = vk::ClearValue{vk::ClearColorValue{std::array<float, 4>{0.0f, 0.0f, 0.0f, 1.0f}}};
 
-        vk::ClearValue depthClear = vk::ClearDepthStencilValue(1.0f, 0.0f);
-        vk::RenderingAttachmentInfo depthAttachment;
-        depthAttachment.clearValue = depthClear;
-        depthAttachment.imageLayout = vk::ImageLayout::eDepthAttachmentOptimal;
+        vk::RenderingAttachmentInfo depthAttachment{};
         depthAttachment.imageView = m_DepthImageView;
+        depthAttachment.imageLayout = vk::ImageLayout::eDepthAttachmentOptimal;
         depthAttachment.loadOp = vk::AttachmentLoadOp::eClear;
         depthAttachment.storeOp = vk::AttachmentStoreOp::eDontCare;
+        depthAttachment.clearValue = vk::ClearValue{vk::ClearDepthStencilValue{1.0f, 0}};
 
-        vk::RenderingInfo renderingInfo;
+        vk::RenderingInfo renderingInfo = {};
         renderingInfo.renderArea = vk::Rect2D{vk::Offset2D{0, 0}, m_SwapChain.extent};
         renderingInfo.layerCount = 1;
         renderingInfo.colorAttachmentCount = 1;
         renderingInfo.pColorAttachments = &colorAttachment;
         renderingInfo.pDepthAttachment = &depthAttachment;
 
-        TransitionImageLayout(m_CmdBuffers[m_FrameIndex], m_SwapChainImages[m_ImageIndex], vk::ImageLayout::eUndefined,
-                              vk::ImageLayout::eColorAttachmentOptimal, {}, vk::AccessFlagBits2::eColorAttachmentWrite,
-                              vk::PipelineStageFlagBits2::eColorAttachmentOutput,
-                              vk::PipelineStageFlagBits2::eColorAttachmentOutput, vk::ImageAspectFlagBits::eColor);
+        cmd.beginRendering(renderingInfo);
 
-        TransitionImageLayout(
-                m_CmdBuffers[m_FrameIndex], m_DepthImage, vk::ImageLayout::eUndefined,
-                vk::ImageLayout::eDepthAttachmentOptimal, vk::AccessFlagBits2::eDepthStencilAttachmentWrite,
-                vk::AccessFlagBits2::eDepthStencilAttachmentWrite,
-                vk::PipelineStageFlagBits2::eEarlyFragmentTests | vk::PipelineStageFlagBits2::eLateFragmentTests,
-                vk::PipelineStageFlagBits2::eEarlyFragmentTests | vk::PipelineStageFlagBits2::eLateFragmentTests,
-                vk::ImageAspectFlagBits::eDepth);
+        cmd.setViewport(0, vk::Viewport{0.0f, 0.0f, static_cast<float>(m_SwapChain.extent.width),
+                                        static_cast<float>(m_SwapChain.extent.height), 0.0f, 1.0f});
 
-        m_CmdBuffers[m_FrameIndex].beginRendering(renderingInfo);
-
-        m_CmdBuffers[m_FrameIndex].setViewport(0,
-                                               vk::Viewport{0.0f, 0.0f, static_cast<float>(m_SwapChain.extent.width),
-                                                            static_cast<float>(m_SwapChain.extent.height), 0.0f, 1.0f});
-        m_CmdBuffers[m_FrameIndex].setScissor(0, vk::Rect2D{vk::Offset2D{0, 0}, m_SwapChain.extent});
-
-        ASSERT(m_Device.resetFences(m_InFlightFences[m_FrameIndex]) == vk::Result::eSuccess, "Failed to reset fences");
+        cmd.setScissor(0, vk::Rect2D{vk::Offset2D{0, 0}, m_SwapChain.extent});
 
         return true;
     }
 
     void VulkanAPI::EndFrame()
     {
-        ExecCommands();
-        m_CmdBuffers[m_FrameIndex].endRendering();
+        vk::CommandBuffer cmd = m_CmdBuffers[m_FrameIndex];
 
-        TransitionImageLayout(m_CmdBuffers[m_FrameIndex], m_SwapChainImages[m_ImageIndex],
-                              vk::ImageLayout::eColorAttachmentOptimal, vk::ImageLayout::ePresentSrcKHR,
-                              vk::AccessFlagBits2::eColorAttachmentWrite, {},
+        ExecCommands();
+
+        cmd.endRendering();
+
+        if (m_Viewport)
+        {
+            TransitionImageLayout(cmd, m_Viewport->m_Image, vk::ImageLayout::eColorAttachmentOptimal,
+                                  vk::ImageLayout::eShaderReadOnlyOptimal, vk::AccessFlagBits2::eColorAttachmentWrite,
+                                  vk::AccessFlagBits2::eShaderSampledRead,
+                                  vk::PipelineStageFlagBits2::eColorAttachmentOutput,
+                                  vk::PipelineStageFlagBits2::eFragmentShader, vk::ImageAspectFlagBits::eColor);
+
+            m_Viewport->m_Layout = vk::ImageLayout::eShaderReadOnlyOptimal;
+
+            TransitionImageLayout(cmd, m_SwapChainImages[m_ImageIndex], vk::ImageLayout::eUndefined,
+                                  vk::ImageLayout::eColorAttachmentOptimal, {},
+                                  vk::AccessFlagBits2::eColorAttachmentWrite, vk::PipelineStageFlagBits2::eTopOfPipe,
+                                  vk::PipelineStageFlagBits2::eColorAttachmentOutput, vk::ImageAspectFlagBits::eColor);
+        }
+
+        vk::RenderingAttachmentInfo imguiAttachment{};
+        imguiAttachment.imageView = m_SwapChainImageViews[m_ImageIndex];
+        imguiAttachment.imageLayout = vk::ImageLayout::eColorAttachmentOptimal;
+        imguiAttachment.loadOp = m_Viewport ? vk::AttachmentLoadOp::eClear : vk::AttachmentLoadOp::eLoad;
+        imguiAttachment.storeOp = vk::AttachmentStoreOp::eStore;
+        imguiAttachment.clearValue = vk::ClearValue{vk::ClearColorValue{std::array{0.05f, 0.05f, 0.05f, 1.0f}}};
+
+        vk::RenderingInfo imguiRenderingInfo = {};
+        imguiRenderingInfo.renderArea = vk::Rect2D{vk::Offset2D{0, 0}, m_SwapChain.extent};
+        imguiRenderingInfo.layerCount = 1;
+        imguiRenderingInfo.colorAttachmentCount = 1;
+        imguiRenderingInfo.pColorAttachments = &imguiAttachment;
+
+        imguiRenderingInfo.pDepthAttachment = nullptr;
+
+        cmd.beginRendering(imguiRenderingInfo);
+
+        ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), static_cast<VkCommandBuffer>(cmd));
+
+        cmd.endRendering();
+
+        TransitionImageLayout(cmd, m_SwapChainImages[m_ImageIndex], vk::ImageLayout::eColorAttachmentOptimal,
+                              vk::ImageLayout::ePresentSrcKHR, vk::AccessFlagBits2::eColorAttachmentWrite, {},
                               vk::PipelineStageFlagBits2::eColorAttachmentOutput,
                               vk::PipelineStageFlagBits2::eBottomOfPipe, vk::ImageAspectFlagBits::eColor);
 
-        ASSERT(m_CmdBuffers[m_FrameIndex].end() == vk::Result::eSuccess, "Failed to end command buffer recording");
+        ASSERT(cmd.end() == vk::Result::eSuccess, "Failed to end command buffer recording");
+
+        ASSERT(m_Device.resetFences(m_InFlightFences[m_FrameIndex]) == vk::Result::eSuccess, "Failed to reset fence");
 
         vk::PipelineStageFlags waitDstStageMask = vk::PipelineStageFlagBits::eColorAttachmentOutput;
 
@@ -167,6 +251,7 @@ namespace Rose {
         submitInfo.pCommandBuffers = &m_CmdBuffers[m_FrameIndex];
         submitInfo.signalSemaphoreCount = 1;
         submitInfo.pSignalSemaphores = &m_RendererFinishedSemaphores[m_ImageIndex];
+
         ASSERT(m_GraphicsQueue.submit(submitInfo, m_InFlightFences[m_FrameIndex]) == vk::Result::eSuccess,
                "Failed to submit command buffer to graphics queue");
 
@@ -180,15 +265,25 @@ namespace Rose {
         presentInfo.pImageIndices = &m_ImageIndex;
 
         vk::Result presentResult = m_GraphicsQueue.presentKHR(presentInfo);
+
         if (presentResult == vk::Result::eErrorOutOfDateKHR || presentResult == vk::Result::eSuboptimalKHR)
-        {
-            RecreateSwapChain();
-        }
+            HandleSwapChainResize();
     }
 
     void VulkanAPI::WaitDeviceIdle() const
     {
         ASSERT(m_Device.waitIdle() == vk::Result::eSuccess, "Failed to wait for device idle");
+    }
+
+    void VulkanAPI::SetViewportImage(ViewportImage& viewport)
+    {
+        m_Viewport = reinterpret_cast<VulkanViewportImage*>(&viewport);
+        m_Viewport->m_Layout = vk::ImageLayout::eUndefined;
+    }
+
+    U32 VulkanAPI::GraphicsQueueFamilyIndex()
+    {
+        return s_CurrentContext->m_VkbDevice.get_queue_index(vkb::QueueType::graphics).value();
     }
 
     vk::Format VulkanAPI::SwapChainSurfaceFormat()
@@ -286,19 +381,7 @@ namespace Rose {
         ASSERT(false, "Failed to find suitable image format");
     }
 
-    void VulkanAPI::OnWindowResize(const WindowResizedEvent& e)
-    {
-        if (e.GetWidth() == 0 || e.GetHeight() == 0)
-            return;
-
-        RecreateSwapChain();
-
-        m_Device.destroyImageView(m_DepthImageView);
-        m_Device.freeMemory(m_DepthImageMemory);
-        m_Device.destroyImage(m_DepthImage);
-
-        CreateDepthResources();
-    }
+    void VulkanAPI::OnWindowResize(const WindowResizedEvent& e) { HandleSwapChainResize(); }
 
     void VulkanAPI::SavePipelineCache() const
     {
@@ -390,7 +473,7 @@ namespace Rose {
         m_TransferQueue = transferQueueResult.value();
 
         vkb::SwapchainBuilder swapChainBuilder(m_VkbDevice);
-        auto swapChainResult = swapChainBuilder.build();
+        auto swapChainResult = swapChainBuilder.set_desired_format({.format = VK_FORMAT_R8G8B8A8_SNORM}).build();
 
         ASSERT(swapChainResult, std::string("Failed to create swap chain: " + swapChainResult.error().message()));
         m_SwapChain = swapChainResult.value();
@@ -487,6 +570,27 @@ namespace Rose {
         m_PipelineCache = result.value;
     }
 
+    void VulkanAPI::HandleSwapChainResize()
+    {
+        int width, height;
+        glfwGetFramebufferSize(m_Window, &width, &height);
+
+        if (width == 0 || height == 0)
+            return;
+
+        WaitDeviceIdle();
+
+        RecreateSwapChain();
+
+        m_Device.destroyImageView(m_DepthImageView);
+        m_Device.destroyImage(m_DepthImage);
+        m_Device.freeMemory(m_DepthImageMemory);
+
+        CreateDepthResources();
+
+        m_Viewport->Resize(width, height);
+    }
+
     void VulkanAPI::RecreateSwapChain()
     {
         int width, height;
@@ -509,7 +613,10 @@ namespace Rose {
         vkb::Swapchain oldSwapChain = m_SwapChain;
 
         vkb::SwapchainBuilder builder(m_VkbDevice);
-        auto swapChainResult = builder.set_old_swapchain(m_SwapChain).set_desired_extent(width, height).build();
+        auto swapChainResult = builder.set_old_swapchain(m_SwapChain)
+                                       .set_desired_format({.format = VK_FORMAT_R8G8B8A8_SNORM})
+                                       .set_desired_extent(width, height)
+                                       .build();
 
         ASSERT(swapChainResult, std::string("Failed to create swap chain: " + swapChainResult.error().message()));
         m_SwapChain = swapChainResult.value();

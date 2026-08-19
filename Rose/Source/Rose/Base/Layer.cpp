@@ -28,4 +28,10 @@ namespace Rose {
 
         m_EventBus->Queue(std::make_unique<AppRenderedEvent>());
     }
+
+    void LayerStack::ImGuiRender() const
+    {
+        for (Layer* layer : m_Layers)
+            layer->OnImGuiRender();
+    }
 } // namespace Rose

@@ -14,6 +14,8 @@ namespace Rose {
         static AppInitFunc AppInitFn;
         static AppShutdownFunc AppShutdownFn;
 
+        static bool ViewportRendering;
+
     public:
         int Run(std::vector<std::string>&& args);
         static void Close() { s_Running = false; }

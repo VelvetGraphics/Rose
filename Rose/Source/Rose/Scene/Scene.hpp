@@ -18,6 +18,7 @@ namespace Rose {
         }
 
         void DestroyEntity(entt::entity e) { m_Registry.destroy(e); }
+        bool Exists(entt::entity e) const { return m_Registry.valid(e); }
 
         template<typename T>
         T& AddComponent(entt::entity e)

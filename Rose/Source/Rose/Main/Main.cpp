@@ -4,6 +4,7 @@
 #include "Rose/Base/EventTypes.hpp"
 #include "Rose/Base/Window.hpp"
 #include "Rose/Core/Core.hpp"
+#include "Rose/ImGui/ImGuiAPI.hpp"
 #include "Rose/Renderer/Renderer.hpp"
 
 int Rose::Main::Run(std::vector<std::string>&& args)
@@ -46,6 +47,8 @@ bool Rose::Main::RoseInit(std::vector<std::string>& args)
             []<typename T>(T&& event) { Rose::Main::OnWindowClose(std::forward<T>(event)); });
     m_LayerStack.SetEventBus(&m_EventBus);
 
+    ImGuiAPI::Init(m_Window);
+
     return true;
 }
 
@@ -54,7 +57,10 @@ void Rose::Main::RoseShutdown()
     s_Running = true;
 
     Renderer::WaitDeviceIdle();
+
     m_LayerStack.Clear();
+
+    ImGuiAPI::Shutdown();
 
     Renderer::Shutdown();
 
@@ -85,6 +91,11 @@ void Rose::Main::MainLoop()
             if (Renderer::BeginFrame())
             {
                 m_LayerStack.Render();
+
+                ImGuiAPI::BeginFrame();
+                m_LayerStack.ImGuiRender();
+                ImGuiAPI::EndFrame();
+
                 Renderer::EndFrame();
             }
         }

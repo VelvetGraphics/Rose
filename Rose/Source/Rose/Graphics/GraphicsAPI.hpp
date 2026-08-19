@@ -2,6 +2,8 @@
 
 #include <GLFW/glfw3.h>
 
+#include "Rose/Graphics/ViewportImage.hpp"
+
 namespace Rose {
     class GraphicsAPI
     {
@@ -23,6 +25,8 @@ namespace Rose {
 
         virtual void MakeContextCurrent() = 0;
         virtual void WaitDeviceIdle() const = 0;
+
+        virtual void SetViewportImage(ViewportImage& viewport) = 0;
 
         static API GetAPI() { return s_API; }
 

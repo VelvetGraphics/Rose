@@ -10,6 +10,7 @@ namespace Rose {
         virtual void OnTick(float dt) {}
         virtual void OnUpdate(float dt) {}
         virtual void OnRender() {}
+        virtual void OnImGuiRender() {}
     };
 
     class LayerStack final
@@ -58,6 +59,7 @@ namespace Rose {
         void Tick(float dt) const;
         void Update(float dt) const;
         void Render() const;
+        void ImGuiRender() const;
 
         void SetEventBus(EventBus* ebus) { m_EventBus = ebus; }
 

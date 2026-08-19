@@ -38,10 +38,16 @@ target_include_directories(tiny_obj_loader PUBLIC
         Vendor/tiny_obj_loader
 )
 
-add_library(stb_image STATIC  Vendor/stb_image/stb_image/stb_image.c)
+add_library(stb_image STATIC Vendor/stb_image/stb_image/stb_image.c)
 target_include_directories(stb_image PUBLIC
-    Vendor/stb_image
+        Vendor/stb_image
 )
+
+file(GLOB IMGUI_SRC Vendor/ImGui/*.cpp)
+file(GLOB IMGUI_PLATFORM Vendor/ImGui/backends/imgui_impl_vulkan.cpp Vendor/ImGui/backends/imgui_impl_glfw.cpp)
+add_library(ImGui STATIC ${IMGUI_SRC} ${IMGUI_PLATFORM})
+target_include_directories(ImGui PUBLIC Vendor/ImGui)
+target_link_libraries(ImGui PUBLIC glfw Vulkan::Vulkan)
 
 target_link_libraries(Rose PUBLIC
         spdlog
@@ -52,6 +58,7 @@ target_link_libraries(Rose PUBLIC
         spirv-cross-core
         tiny_obj_loader
         stb_image
+        ImGui
 )
 
 file(GLOB_RECURSE ROSE_COMMON_INCLUDE Source/Rose/Common/CommonInclude.hpp)

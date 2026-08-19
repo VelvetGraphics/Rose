@@ -17,4 +17,6 @@ namespace Rose {
     void Renderer::EndFrame() { s_GraphicsAPI->EndFrame(); }
 
     void Renderer::WaitDeviceIdle() { s_GraphicsAPI->WaitDeviceIdle(); }
+
+    void Renderer::SetViewport(ViewportImage& viewport) { s_GraphicsAPI->SetViewportImage(viewport); }
 } // namespace Rose

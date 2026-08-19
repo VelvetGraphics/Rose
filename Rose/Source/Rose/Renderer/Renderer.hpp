@@ -1,4 +1,5 @@
 #pragma once
+#include "Rose/Graphics/ViewportImage.hpp"
 
 struct GLFWwindow;
 
@@ -15,6 +16,7 @@ namespace Rose {
         static void EndFrame();
 
         static void WaitDeviceIdle();
+        static void SetViewport(ViewportImage& viewport);
 
     private:
         inline static GraphicsAPI* s_GraphicsAPI = nullptr;

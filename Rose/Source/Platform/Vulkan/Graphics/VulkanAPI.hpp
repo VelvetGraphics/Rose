@@ -1,4 +1,5 @@
 #pragma once
+#include "Platform/Vulkan/Graphics/VulkanViewportImage.hpp"
 #include "Platform/Vulkan/VulkanInclude.hpp"
 #include "Rose/Base/EventTypes.hpp"
 #include "Rose/Graphics/GraphicsAPI.hpp"
@@ -24,12 +25,20 @@ namespace Rose {
         void MakeContextCurrent() override { s_CurrentContext = this; }
         void WaitDeviceIdle() const override;
 
+        void SetViewportImage(ViewportImage& viewport) override;
+
+        static vk::Instance Instance() { return s_CurrentContext->m_Instance.instance; }
+
         static vk::PhysicalDevice PhysicalDevice() { return s_CurrentContext->m_PhysicalDevice.physical_device; }
         static vk::Device Device() { return s_CurrentContext->m_Device; }
 
         static vk::CommandPool CmdPool() { return s_CurrentContext->m_GraphicsCmdPool; }
         static U32 FrameIndex() { return s_CurrentContext->m_FrameIndex; }
 
+        static U32 GraphicsQueueFamilyIndex();
+        static vk::Queue GraphicsQueue() { return s_CurrentContext->m_GraphicsQueue; }
+
+        static U32 SwapChainImageCount() { return s_CurrentContext->m_SwapChainImages.size(); }
         static vk::Format SwapChainSurfaceFormat();
         static vk::Extent2D SwapChainExtent() { return s_CurrentContext->m_SwapChain.extent; }
 
@@ -49,6 +58,7 @@ namespace Rose {
         void CreateDepthResources();
         void CreatePipelineCache();
 
+        void HandleSwapChainResize();
         void RecreateSwapChain();
 
         void ExecCommands();
@@ -81,7 +91,7 @@ namespace Rose {
         std::vector<vk::Image> m_SwapChainImages;
         std::vector<vk::ImageView> m_SwapChainImageViews;
         U32 m_ImageIndex = 0;
-        static constexpr U32 s_MaxFramesInFlight = 2;
+        static constexpr U32 s_MaxFramesInFlight = 1;
 
         vk::CommandPool m_GraphicsCmdPool;
         vk::CommandPool m_TransferCmdPool;
@@ -100,5 +110,7 @@ namespace Rose {
 
         vk::PipelineCache m_PipelineCache;
         static constexpr const char* s_PipelineCachePath = ".Cache/Vulkan/PipelineCache.bin";
+
+        VulkanViewportImage* m_Viewport = nullptr;
     };
 } // namespace Rose
